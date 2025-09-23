@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Calendar } from 'lucide-react';
 
 interface Column {
   id: string | number;
@@ -94,6 +94,29 @@ const KanbanColumnDark: React.FC<KanbanColumnProps> = ({
   const styles = getColumnStyles(column.name || column.title);
   const taskCount = tasks?.length || 0;
 
+  // Универсальное извлечение исполнителей из задачи
+  const resolveAssignees = (task: any) => {
+    try {
+      if (Array.isArray(task?.assignees) && task.assignees.length > 0) return task.assignees;
+      const ids: string[] = [];
+      if (task?.assignee_id) ids.push(String(task.assignee_id));
+      if (task?.assigneeId) ids.push(String(task.assigneeId));
+      if (Array.isArray(task?.assignee_ids)) ids.push(...task.assignee_ids.map((x: any) => String(x)));
+      if (Array.isArray(task?.assigneeIds)) ids.push(...task.assigneeIds.map((x: any) => String(x)));
+      const unique = Array.from(new Set(ids.filter(Boolean)));
+      if (!unique.length) return [];
+      if (Array.isArray(users)) {
+        const mapped = unique
+          .map(id => users.find((u: any) => String(u.id) === String(id)))
+          .filter(Boolean);
+        return mapped as any[];
+      }
+      return [];
+    } catch {
+      return [];
+    }
+  };
+
   return (
     <div
       className={`flex-shrink-0 w-80 h-full backdrop-blur-sm border rounded-xl transition-all duration-200 ${
@@ -126,7 +149,7 @@ const KanbanColumnDark: React.FC<KanbanColumnProps> = ({
             tasks.map((task) => (
               <div
                 key={task.id}
-                className="p-3 bg-white/5 backdrop-blur-sm border border-white/10 rounded-lg hover:bg-white/10 transition-all duration-200 cursor-move"
+className="p-3 bg-white/5 backdrop-blur-sm border border-white/10 rounded-lg hover:bg-white/10 transition-all duration-200 cursor-move task-card fade-item animate-fade-in"
                 draggable
                 onDragStart={(e) => onDragStart(e, 'task', task)}
                 onDragEnd={onDragEnd}
@@ -140,9 +163,9 @@ const KanbanColumnDark: React.FC<KanbanColumnProps> = ({
                         if (onTaskComplete) onTaskComplete(task);
                       }}
                       title="Отметить как выполнено"
-                      className={`flex items-center justify-center w-5 h-5 rounded-full transition border ${
+className={`flex items-center justify-center w-5 h-5 rounded-full transition-transform duration-200 border hover:scale-110 active:scale-95 ${
                         String((task.status || task.Status || '').toString().toLowerCase()).includes('done')
-                          ? 'bg-green-500 border-green-500 text-white'
+                          ? 'bg-green-500 border-green-500 text-white animate-scale-in'
                           : 'bg-transparent border-white/40 hover:bg-white/10 text-transparent'
                       }`}
                     >
@@ -174,6 +197,30 @@ const KanbanColumnDark: React.FC<KanbanColumnProps> = ({
                 
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
+                    {/* Дедлайн */}
+                    {(() => {
+                      const raw = task.due_date || task.dueDate || task.deadline;
+                      if (!raw) return null;
+                      const due = new Date(raw);
+                      if (isNaN(due.getTime())) return null;
+                      const msLeft = due.getTime() - Date.now();
+                      const ONE_DAY = 24 * 60 * 60 * 1000;
+                      const base = 'text-xs px-2 py-1 rounded-full flex items-center gap-1';
+                      const cls = msLeft <= 0 || msLeft < ONE_DAY
+                        ? 'bg-red-500/20 text-red-300'
+                        : msLeft < 2 * ONE_DAY
+                          ? 'bg-yellow-500/20 text-yellow-300'
+                          : 'bg-gray-500/20 text-gray-300';
+                      const label = due.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+                      return (
+                        <span className={`${base} ${cls}`} title={`Дедлайн: ${due.toLocaleString('ru-RU')}`}>
+                          <Calendar className="w-3 h-3" />
+                          {label}
+                        </span>
+                      );
+                    })()}
+
+                    {/* Приоритет */}
                     {task.priority && (
                       <span className={`text-xs px-2 py-1 rounded-full ${
                         task.priority === 'high' 
@@ -187,25 +234,49 @@ const KanbanColumnDark: React.FC<KanbanColumnProps> = ({
                     )}
                   </div>
                   
-                  {task.assignees && task.assignees.length > 0 && (
-                    <div className="flex -space-x-2">
-                      {task.assignees.slice(0, 3).map((assignee: any, index: number) => (
-                        <div
-                          key={assignee.id || index}
-                          className="w-6 h-6 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white text-xs font-medium ring-2 ring-gray-800"
-                          title={assignee.name || assignee.username || 'User'}
-                        >
-                          {(assignee.name || assignee.username || 'U')[0].toUpperCase()}
+                </div>
+
+                {/* Исполнители задачи */}
+                {(() => {
+                  const asgs = resolveAssignees(task);
+                  if (!Array.isArray(asgs) || asgs.length === 0) return null;
+                  return (
+                    <div className="mt-3 pt-2 border-t border-white/10">
+                      {asgs.length === 1 ? (
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-6 h-6 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white text-xs font-medium ring-2 ring-gray-800"
+                            title={asgs[0].name || asgs[0].username || 'User'}
+                          >
+                            {(asgs[0].name || asgs[0].username || 'U')[0].toUpperCase()}
+                          </div>
+                          <span className="text-xs text-gray-300">
+                            {asgs[0].name || asgs[0].username || 'Без имени'}
+                          </span>
                         </div>
-                      ))}
-                      {task.assignees.length > 3 && (
-                        <div className="w-6 h-6 rounded-full bg-gray-600 flex items-center justify-center text-white text-xs font-medium ring-2 ring-gray-800">
-                          +{task.assignees.length - 3}
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <div className="flex -space-x-2">
+                            {asgs.slice(0, 5).map((assignee: any, index: number) => (
+                              <div
+                                key={assignee.id || index}
+                                className="w-6 h-6 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white text-xs font-medium ring-2 ring-gray-800"
+                                title={assignee.name || assignee.username || 'User'}
+                              >
+                                {(assignee.name || assignee.username || 'U')[0].toUpperCase()}
+                              </div>
+                            ))}
+                            {asgs.length > 5 && (
+                              <div className="w-6 h-6 rounded-full bg-gray-600 flex items-center justify-center text-white text-[10px] font-medium ring-2 ring-gray-800">
+                                +{asgs.length - 5}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>
-                  )}
-                </div>
+                  );
+                })()}
               </div>
             ))
           ) : (

@@ -488,7 +488,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
               key={column.id}
               column={column}
               tasks={columnTasks}
-              users={users}
+              users={projectMembers.length > 0 ? projectMembers : users}
               onTaskCreate={() => handleCreateTask(column)}
               onTaskUpdate={handleTaskUpdated}
               onTaskDelete={handleTaskDeleted}

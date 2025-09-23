@@ -234,21 +234,21 @@
 }
 
 /* Анимации для списков */
-.list-item {
+.fade-item {
   opacity: 0;
   animation: fadeIn 0.4s ease-out forwards;
 }
 
-.list-item:nth-child(1) { animation-delay: 0.1s; }
-.list-item:nth-child(2) { animation-delay: 0.2s; }
-.list-item:nth-child(3) { animation-delay: 0.3s; }
-.list-item:nth-child(4) { animation-delay: 0.4s; }
-.list-item:nth-child(5) { animation-delay: 0.5s; }
-.list-item:nth-child(6) { animation-delay: 0.6s; }
-.list-item:nth-child(7) { animation-delay: 0.7s; }
-.list-item:nth-child(8) { animation-delay: 0.8s; }
-.list-item:nth-child(9) { animation-delay: 0.9s; }
-.list-item:nth-child(10) { animation-delay: 1.0s; }
+.fade-item:nth-child(1) { animation-delay: 0.1s; }
+.fade-item:nth-child(2) { animation-delay: 0.2s; }
+.fade-item:nth-child(3) { animation-delay: 0.3s; }
+.fade-item:nth-child(4) { animation-delay: 0.4s; }
+.fade-item:nth-child(5) { animation-delay: 0.5s; }
+.fade-item:nth-child(6) { animation-delay: 0.6s; }
+.fade-item:nth-child(7) { animation-delay: 0.7s; }
+.fade-item:nth-child(8) { animation-delay: 0.8s; }
+.fade-item:nth-child(9) { animation-delay: 0.9s; }
+.fade-item:nth-child(10) { animation-delay: 1.0s; }
 
 /* Анимации для форм */
 .form-field {
