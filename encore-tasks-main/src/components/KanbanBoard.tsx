@@ -484,7 +484,12 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
 
       {/* Columns */}
       <div className="flex space-x-4 overflow-x-auto pb-4 h-full">
-        {columns.map((column) => {
+        {columns
+          .filter(col => {
+            const name = String(col.name || col.title || '').toLowerCase();
+            return !name.includes('беклог') && !name.includes('backlog');
+          })
+          .map((column) => {
           const columnTasks = getTasksForColumn(column);
           return (
               <KanbanColumnDark

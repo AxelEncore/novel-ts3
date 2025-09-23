@@ -35,33 +35,47 @@ const getColumnStyles = (columnName: string | undefined) => {
     };
   }
   
-  const name = columnName.toLowerCase();
+  const name = (columnName || '').toLowerCase().trim();
   
-  if (name.includes('выполнение') || name.includes('todo')) {
+  // К выполнению (серый)
+  // Ищем точные русские формы и TODO
+  if (/\bк\s*выполнению\b/.test(name) || /\btodo\b/.test(name)) {
     return {
       background: 'bg-gray-500/10 border-gray-500/30',
       header: 'text-gray-300',
       accent: 'bg-gray-500',
     };
-  } else if (name.includes('процесс') || name.includes('progress')) {
+  }
+  
+  // В работе (синий)
+  if (/\bв\s*работе\b/.test(name) || /progress|процесс|работ/.test(name)) {
     return {
       background: 'bg-blue-500/10 border-blue-500/30',
       header: 'text-blue-300',
       accent: 'bg-blue-500',
     };
-  } else if (name.includes('проверк') || name.includes('review')) {
+  }
+  
+  // На проверке (фиолетовый)
+  if (/проверке|review/.test(name)) {
     return {
       background: 'bg-purple-500/10 border-purple-500/30',
       header: 'text-purple-300',
       accent: 'bg-purple-500',
     };
-  } else if (name.includes('выполнен') || name.includes('done')) {
+  }
+  
+  // Выполнено (зелёный)
+  if (/выполнено|done|завершено/.test(name)) {
     return {
       background: 'bg-green-500/10 border-green-500/30',
       header: 'text-green-300',
       accent: 'bg-green-500',
     };
-  } else if (name.includes('отложен') || name.includes('deferred') || name.includes('delayed')) {
+  }
+  
+  // Отложено (оранжевый)
+  if (/отложен|отложено|deferred|delay/.test(name)) {
     return {
       background: 'bg-orange-500/10 border-orange-500/30',
       header: 'text-orange-300',
