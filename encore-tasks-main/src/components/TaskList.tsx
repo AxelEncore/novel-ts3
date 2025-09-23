@@ -168,7 +168,11 @@ export function TaskList({ projectId, boardId, columnId }: TaskListProps) {
       const response = await fetch(`/api/columns?${params}`);
       if (response.ok) {
         const data = await response.json();
-        setColumns(data.columns || []);
+        const cols = (data.columns || []).filter((c: any) => {
+          const name = String(c.name || c.title || '').toLowerCase();
+          return !name.includes('беклог') && !name.includes('backlog');
+        });
+        setColumns(cols);
       }
     } catch (error) {
       console.error('Error loading columns:', error);

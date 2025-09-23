@@ -35,7 +35,7 @@ const priorityOptions: {value: TaskPriority;label: string;color: string;}[] =
 
 const statusLabels: Record<string, string> = {
   "todo": "К выполнению",
-  "in-progress": "В работе",
+  "in_progress": "В работе",
   "review": "На проверке",
   "done": "Выполнено"
 };

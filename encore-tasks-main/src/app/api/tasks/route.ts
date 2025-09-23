@@ -357,7 +357,7 @@ export async function POST(request: NextRequest) {
     const statusByColumn = titleLower.includes('выполнено') || titleLower.includes('done') ? 'done'
       : titleLower.includes('проверк') || titleLower.includes('review') ? 'review'
       : titleLower.includes('работе') || titleLower.includes('progress') || titleLower.includes('процессе') ? 'in_progress'
-      : titleLower.includes('беклог') || titleLower.includes('backlog') ? 'backlog'
+      : titleLower.includes('беклог') || titleLower.includes('backlog') ? 'todo'
       : titleLower.includes('отлож') || titleLower.includes('deferred') ? 'deferred'
       : 'todo';
     

@@ -519,24 +519,63 @@ class ApiClient {
   }
 
   async updateTask(taskId: string, updateData: {
-    title: string;
-    description: string;
-    status: string;
-    priority: string;
-    position: number;
-    storyPoints: number;
-    estimatedHours: number;
-    actualHours: number;
-    deadline: string;
-    columnId: string;
-    parentTaskId: string;
-    isArchived: boolean;
-    assigneeIds: string[];
-    tags: string[];
+    title?: string;
+    description?: string;
+    status?: string;
+    priority?: string;
+    position?: number;
+    storyPoints?: number;
+    estimatedHours?: number;
+    actualHours?: number;
+    deadline?: string | Date;
+    dueDate?: string | Date;
+    due_date?: string | Date;
+    columnId?: string;
+    column_id?: string;
+    parentTaskId?: string;
+    isArchived?: boolean;
+    assigneeIds?: string[];
+    assignee_ids?: string[];
+    assignees?: Array<{ id: string } | string>;
+    tags?: string[];
   }) {
+    // Normalize fields to backend expectations for /api/tasks/[id] (expects dueDate, columnId, etc.)
+    const payload: any = { ...updateData };
+
+    // Normalize date field to dueDate (ISO string)
+    const toIso = (v: any) => (v instanceof Date ? v.toISOString() : String(v));
+    if (payload.deadline) {
+      payload.dueDate = toIso(payload.deadline);
+      delete payload.deadline;
+    }
+    if (payload.due_date) {
+      payload.dueDate = toIso(payload.due_date);
+      delete payload.due_date;
+    }
+    if (payload.dueDate instanceof Date) {
+      payload.dueDate = (payload.dueDate as Date).toISOString();
+    } else if (typeof payload.dueDate === 'string') {
+      // Convert plain date (YYYY-MM-DD) to ISO string expected by backend
+      const plain = payload.dueDate.trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(plain)) {
+        payload.dueDate = new Date(`${plain}T00:00:00`).toISOString();
+      }
+    }
+
+    // Normalize column id
+    if (payload.column_id && !payload.columnId) {
+      payload.columnId = String(payload.column_id);
+      delete payload.column_id;
+    }
+
+    // Normalize assignees
+    if (!payload.assigneeIds && !payload.assignee_ids && Array.isArray(payload.assignees)) {
+      payload.assigneeIds = payload.assignees.map((a: any) => (typeof a === 'string' ? a : a.id)).filter(Boolean);
+    }
+
     return this.request<{ task: any }>(`/tasks/${taskId}`, {
       method: 'PUT',
-      body: JSON.stringify(updateData),
+      body: JSON.stringify(payload),
     });
   }
 

@@ -109,8 +109,11 @@ export class SQLiteAdapter {
     return uuidv4();
   }
 
-  private dateToISO(date: Date | null): string | null {
-    return date ? date.toISOString() : null;
+  private dateToISO(date: Date | string | null): string | null {
+    if (!date) return null;
+    const d = date instanceof Date ? date : new Date(date);
+    if (isNaN(d.getTime())) return null;
+    return d.toISOString();
   }
 
   private isoToDate(iso: string | null): Date | null {

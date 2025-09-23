@@ -109,8 +109,9 @@ export function TopBar({
   const clearFilters = () => {
     dispatch({
       type: "SET_FILTERS",
-      payload: { assignee: "", priority: "", status: "", deadline: "" }
+      payload: { assignee: "", priority: "", status: "", deadline: "", search: "" }
     });
+    setSearchTerm("");
   };
 
   // Get notification count
@@ -198,7 +199,11 @@ export function TopBar({
                 type="text"
                 placeholder="Поиск задач..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setSearchTerm(v);
+                  dispatch({ type: "SET_FILTERS", payload: { search: v } });
+                }}
                 className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 pl-10 text-white placeholder-gray-400 focus:outline-none focus:border-indigo-500/50"
                 autoFocus
                 onBlur={() => {

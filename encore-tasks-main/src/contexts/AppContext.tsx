@@ -61,6 +61,7 @@ interface AppState {
     priority: string;
     status: string;
     deadline: string;
+    search?: string;
   };
   sortBy: "priority" | "deadline" | "created" | "updated";
   sortOrder: "asc" | "desc";
@@ -148,7 +149,8 @@ const initialState: AppState = {
     assignee: "",
     priority: "",
     status: "",
-    deadline: ""
+    deadline: "",
+    search: ""
   },
   sortBy: "created",
   sortOrder: "desc",

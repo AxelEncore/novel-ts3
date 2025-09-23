@@ -490,7 +490,46 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
             return !name.includes('беклог') && !name.includes('backlog');
           })
           .map((column) => {
-          const columnTasks = getTasksForColumn(column);
+          const rawTasksAny = getTasksForColumn(column);
+          const safeTasks: any[] = Array.isArray(rawTasksAny) ? rawTasksAny : [];
+          const columnTasks = safeTasks.filter((task: any) => {
+            try {
+              // Text search across title, description, tags, assignees
+              const q = String(state.filters?.search || '').trim().toLowerCase();
+              if (q) {
+                const names = (Array.isArray(task.assignees) ? task.assignees : [])
+                  .map((a: any) => (a && (a.name || a.username)) || '')
+                  .filter(Boolean);
+                const tags = Array.isArray(task.tags) ? task.tags : [];
+                const hay = [
+                  String(task.title || ''),
+                  String(task.description || ''),
+                  ...tags,
+                  ...names
+                ].join(' ').toLowerCase();
+                if (!hay.includes(q)) return false;
+              }
+              // Assignee filter
+              if (state.filters.assignee) {
+                const asgs = Array.isArray(task.assignees) ? task.assignees : [];
+                const hasAssignee = asgs.some((a: any) => String(a?.id || a?.user_id || a?.userId || '') === String(state.filters.assignee))
+                  || String(task.assignee_id || task.assigneeId || '') === String(state.filters.assignee);
+                if (!hasAssignee) return false;
+              }
+              // Priority filter
+              if (state.filters.priority) {
+                if (String(task.priority || '').toLowerCase() !== String(state.filters.priority)) return false;
+              }
+              // Status filter
+              if (state.filters.status) {
+                if (String(task.status || '').toLowerCase() !== String(state.filters.status)) return false;
+              }
+              return true;
+            } catch (e) {
+              console.error('Filter error for task', task?.id, e);
+              return true; // Fail-open to avoid hard crashes
+            }
+          });
           return (
               <KanbanColumnDark
               key={column.id}

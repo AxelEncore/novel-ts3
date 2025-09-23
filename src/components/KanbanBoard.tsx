@@ -39,7 +39,7 @@ const getStatusMapping = (columns: { id: string; position: number; name: string 
     if (column.name.toLowerCase().includes('выполнено') || column.name.toLowerCase().includes('done') || column.name.toLowerCase().includes('завершено')) {
       status = 'done';
     } else if (column.name.toLowerCase().includes('работе') || column.name.toLowerCase().includes('progress') || column.name.toLowerCase().includes('процессе')) {
-      status = 'in-progress';
+      status = 'in_progress';
     } else if (column.name.toLowerCase().includes('проверк') || column.name.toLowerCase().includes('review') || column.name.toLowerCase().includes('тест')) {
       status = 'review';
     } else {
@@ -130,6 +130,23 @@ export function KanbanBoard() {
       task.projectId === state.selectedProject?.id &&
       task.boardId === state.selectedBoard?.id
     );
+
+    // Text search
+    if (state.filters.search && state.filters.search.trim() !== '') {
+      const q = state.filters.search.trim().toLowerCase();
+      filteredTasks = filteredTasks.filter((t) => {
+        const tags = Array.isArray((t as any).tags) ? (t as any).tags : [];
+        const asg = Array.isArray(t.assignees) ? t.assignees : (t.assignee ? [t.assignee] : []);
+        const names = asg.map((a: any) => (a && (a.name || a.username)) || '').filter(Boolean);
+        const hay = [
+          String(t.title || ''),
+          String((t as any).description || ''),
+          ...tags,
+          ...names
+        ].join(' ').toLowerCase();
+        return hay.includes(q);
+      });
+    }
 
     // Apply filters
     if (state.filters.assignee) {

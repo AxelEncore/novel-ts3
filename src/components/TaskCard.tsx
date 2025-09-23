@@ -31,7 +31,7 @@ interface TaskCardProps {
 
 const statusColors: Record<string, string> = {
   "todo": "bg-gray-500/10 border-gray-500/20",
-  "in-progress": "bg-blue-500/15 border-blue-500/30",
+  "in_progress": "bg-blue-500/15 border-blue-500/30",
   "review": "bg-purple-500/15 border-purple-500/30",
   "done": "bg-green-500/15 border-green-500/30"
 };
