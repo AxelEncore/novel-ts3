@@ -1,0 +1,64 @@
+{
+  "name": "encore-tasks-database",
+  "version": "1.0.0",
+  "description": "База данных для системы управления задачами Encore Tasks",
+  "main": "migrate.js",
+  "scripts": {
+    "migrate": "node migrate.js migrate",
+    "migrate:up": "node migrate.js migrate",
+    "migrate:down": "node migrate.js rollback",
+    "migrate:status": "node migrate.js status",
+    "migrate:create": "node migrate.js create",
+    "db:setup": "npm run db:create && npm run migrate",
+    "db:create": "node scripts/create-database.js",
+    "db:drop": "node scripts/drop-database.js",
+    "db:reset": "npm run db:drop && npm run db:setup",
+    "db:seed": "node scripts/seed.js",
+    "db:backup": "node scripts/backup.js",
+    "db:restore": "node scripts/restore.js",
+    "db:clean": "node scripts/cleanup.js",
+    "test": "npm run test:migrations && npm run test:functions",
+    "test:migrations": "node tests/test-migrations.js",
+    "test:functions": "node tests/test-functions.js",
+    "lint:sql": "sqlfluff lint migrations/",
+    "format:sql": "sqlfluff format migrations/"
+  },
+  "keywords": [
+    "postgresql",
+    "database",
+    "migrations",
+    "task-management",
+    "encore-tasks"
+  ],
+  "author": "Encore Tasks Team",
+  "license": "MIT",
+  "dependencies": {
+    "pg": "^8.11.3",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "pg-connection-string": "^2.6.2",
+    "yargs": "^17.7.2"
+  },
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=8.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/encore-tasks/database.git"
+  },
+  "bugs": {
+    "url": "https://github.com/encore-tasks/database/issues"
+  },
+  "homepage": "https://github.com/encore-tasks/database#readme",
+  "config": {
+    "database": {
+      "host": "localhost",
+      "port": 5432,
+      "name": "encore_tasks",
+      "user": "postgres"
+    }
+  }
+}
