@@ -265,6 +265,87 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
   };
 
 
+  // Поиск id колонки по целевому статусу с учетом локализации
+  const findTargetColumnIdForStatus = (targetStatus: 'done' | 'review'): string | null => {
+    // Подбираем безопасные релевантные паттерны без ложных срабатываний
+    // ВАЖНО: не использовать "выполнен" (попадает в "к выполнению")
+    const synonyms = targetStatus === 'done'
+      ? ['выполнено', 'готово', 'готов', 'done']
+      : ['проверке', 'на проверке', 'review'];
+
+    const found = columns.find(col => {
+      const mapped = statusMapping[col.id];
+      if (mapped === targetStatus) return true;
+      const name = (col.name || col.title || '').toLowerCase().trim();
+      // Ищем точные слова или устойчивые формы, а не подстроки вида "выполнен"
+      return synonyms.some(s => name === s || name.includes(` ${s}`) || name.startsWith(`${s} `) || name.endsWith(` ${s}`));
+    });
+
+    return found ? String(found.id) : null;
+  };
+
+  // Обработка клика по галочке (toggle)
+  const handleTaskComplete = async (task: Task) => {
+    try {
+      const sourceColumn = columns.find(col => col.tasks?.some(t => t.id === task.id));
+      const currentStatus = String((task as any).status || (task as any).Status || '').toLowerCase();
+      const toggleTo: 'done' | 'review' = currentStatus === 'done' ? 'review' : 'done';
+
+      const targetColumnId = findTargetColumnIdForStatus(toggleTo) || (sourceColumn ? String(sourceColumn.id) : String((task as any).column_id || (task as any).columnId || ''));
+
+      const updateData: any = { status: toggleTo };
+      if (targetColumnId) updateData.columnId = targetColumnId;
+
+      const response = await fetch(`/api/tasks/${task.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(updateData)
+      });
+
+      if (!response.ok) {
+        const err = await response.text();
+        throw new Error(err || 'Failed to update task status');
+      }
+
+      const updatedTask = await response.json();
+
+      // Перемещаем задачу локально между колонками при необходимости
+      setColumns(prev => {
+        const next = prev.map(col => ({ ...col }));
+        const fromIdx = sourceColumn ? next.findIndex(c => c.id === sourceColumn.id) : -1;
+        const toIdx = next.findIndex(c => String(c.id) === String(targetColumnId));
+
+        // убрать из источника
+        if (fromIdx !== -1) {
+          next[fromIdx] = {
+            ...next[fromIdx],
+            tasks: (next[fromIdx].tasks || []).filter((t: any) => t.id !== task.id)
+          };
+        }
+
+        // добавить в цель (или обновить в исходной, если цель не найдена)
+        if (toIdx !== -1) {
+          next[toIdx] = {
+            ...next[toIdx],
+            tasks: [...(next[toIdx].tasks || []), { ...task, ...updatedTask }]
+          };
+        } else if (fromIdx !== -1) {
+          next[fromIdx] = {
+            ...next[fromIdx],
+            tasks: (next[fromIdx].tasks || []).map((t: any) => t.id === task.id ? { ...t, ...updatedTask } : t)
+          };
+        }
+        return next;
+      });
+
+      if (onTaskUpdate) onTaskUpdate();
+    } catch (error) {
+      console.error('Ошибка при переключении статуса задачи:', error);
+      toast.error('Не удалось обновить статус задачи');
+    }
+  };
+
   // Drag and Drop handlers
   const handleDragStart = (
     e: React.DragEvent,
@@ -403,7 +484,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
         {columns.map((column) => {
           const columnTasks = getTasksForColumn(column);
           return (
-            <KanbanColumnDark
+              <KanbanColumnDark
               key={column.id}
               column={column}
               tasks={columnTasks}
@@ -411,6 +492,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
               onTaskCreate={() => handleCreateTask(column)}
               onTaskUpdate={handleTaskUpdated}
               onTaskDelete={handleTaskDeleted}
+              onTaskComplete={(task) => handleTaskComplete(task)}
               onDragStart={(e, type, item) => handleDragStart(e, type, item)}
               onDragOver={(e) => handleDragOver(e, column.id)}
               onDrop={(e) => handleDrop(e, column.id)}

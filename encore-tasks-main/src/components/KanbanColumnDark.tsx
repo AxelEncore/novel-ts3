@@ -16,6 +16,7 @@ interface KanbanColumnProps {
   onTaskCreate: () => void;
   onTaskUpdate: (task: any) => void;
   onTaskDelete: (taskId: number) => void;
+  onTaskComplete?: (task: any) => void;
   onDragStart: (e: React.DragEvent, type: string, item: any) => void;
   onDragOver: (e: React.DragEvent) => void;
   onDrop: (e: React.DragEvent) => void;
@@ -82,6 +83,7 @@ const KanbanColumnDark: React.FC<KanbanColumnProps> = ({
   onTaskCreate,
   onTaskUpdate,
   onTaskDelete,
+  onTaskComplete,
   onDragStart,
   onDragOver,
   onDrop,
@@ -130,9 +132,38 @@ const KanbanColumnDark: React.FC<KanbanColumnProps> = ({
                 onDragEnd={onDragEnd}
               >
                 <div className="flex items-start justify-between mb-2">
-                  <h4 className="text-white font-medium text-sm leading-tight">
-                    {task.title || task.name || 'Без названия'}
-                  </h4>
+                  <div className="flex items-center gap-2">
+                    {/* Toggle complete circle */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (onTaskComplete) onTaskComplete(task);
+                      }}
+                      title="Отметить как выполнено"
+                      className={`flex items-center justify-center w-5 h-5 rounded-full transition border ${
+                        String((task.status || task.Status || '').toString().toLowerCase()).includes('done')
+                          ? 'bg-green-500 border-green-500 text-white'
+                          : 'bg-transparent border-white/40 hover:bg-white/10 text-transparent'
+                      }`}
+                    >
+                      {/* галочка как на примере: тонкая белая галочка внутри зелёного круга */}
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        className="w-3 h-3"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    </button>
+                    <h4 className="text-white font-medium text-sm leading-tight">
+                      {task.title || task.name || 'Без названия'}
+                    </h4>
+                  </div>
                 </div>
                 
                 {task.description && (
