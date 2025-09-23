@@ -19,9 +19,9 @@ const updateBoardSchema = z.object({
 
 // Проверка доступа к доске
 async function checkBoardAccess(boardId: string, userId: string, requiredRole?: string) {
-  // Используем метод hasProjectAccess из database adapter
+  // Для SQLite у доски нет поля created_by, поэтому проверяем владельца проекта
   const boardResult = await databaseAdapter.query(
-    `SELECT project_id, created_by FROM boards WHERE id = $1`,
+    `SELECT project_id FROM boards WHERE id = $1`,
     [boardId]
   );
 
@@ -31,38 +31,34 @@ async function checkBoardAccess(boardId: string, userId: string, requiredRole?: 
 
   const board = boardResult[0] as any;
   const projectId = board.project_id;
-  
+
   // Проверяем доступ к проекту
   const hasAccess = await databaseAdapter.hasProjectAccess(userId, projectId);
-  
   if (!hasAccess) {
     return { hasAccess: false, board, role: null };
   }
 
-  // Получаем роль пользователя в проекте
+  // Роль пользователя в проекте
   const roleResult = await databaseAdapter.query(
     `SELECT role FROM project_members WHERE project_id = $1 AND user_id = $2`,
     [projectId, userId]
   );
-
   const role = roleResult.length > 0 ? roleResult[0].role : null;
 
   if (requiredRole && role) {
     const roleHierarchy = ['viewer', 'member', 'admin', 'owner'];
     const userRoleIndex = roleHierarchy.indexOf(role);
     const requiredRoleIndex = roleHierarchy.indexOf(requiredRole);
-    
     if (userRoleIndex < requiredRoleIndex) {
       return { hasAccess: false, board, role };
     }
   }
 
-  return { 
-     hasAccess: true, 
-     board, 
-     role, 
-     isBoardOwner: board.created_by === userId
-   };
+  // Определяем владельца как владельца проекта
+  const project = await databaseAdapter.getProjectById(projectId);
+  const isBoardOwner = project && (project.created_by === userId || project.creator_id === userId);
+
+  return { hasAccess: true, board, role, isBoardOwner };
 }
 
 // GET /api/boards/[id] - Получить доску по ID
@@ -96,17 +92,15 @@ export async function GET(
       `SELECT 
         b.*,
         p.name as project_name,
-        u.name as created_by_username,
         COUNT(DISTINCT c.id) as columns_count,
         COUNT(DISTINCT t.id) as tasks_count,
-        COUNT(DISTINCT CASE WHEN t.status = 'completed' THEN t.id END) as completed_tasks_count
+        COUNT(DISTINCT CASE WHEN t.status = 'done' THEN t.id END) as completed_tasks_count
       FROM boards b
       LEFT JOIN projects p ON b.project_id = p.id
-      LEFT JOIN users u ON b.created_by = u.id
       LEFT JOIN columns c ON b.id = c.board_id
       LEFT JOIN tasks t ON b.id = t.board_id
       WHERE b.id = $1
-      GROUP BY b.id, p.name, u.name`,
+      GROUP BY b.id, p.name`,
       [boardId]
     );
 
@@ -118,6 +112,9 @@ export async function GET(
     }
 
     const row = boardResult[0] as any;
+    // В SQLite у boards нет created_by, используем создателя проекта
+    const project = await databaseAdapter.getProjectById(row.project_id);
+
     const board: BoardWithStats = {
       id: row.id,
       name: row.name,
@@ -131,9 +128,9 @@ export async function GET(
       settings: row.settings,
       created_at: row.created_at,
       updated_at: row.updated_at,
-      created_by: row.created_by,
+      created_by: project?.created_by || project?.creator_id || '',
       project_name: row.project_name,
-      created_by_username: row.created_by_username,
+      created_by_username: 'admin',
       columns_count: parseInt(row.columns_count) || 0,
       tasks_count: parseInt(row.tasks_count) || 0,
       completed_tasks_count: parseInt(row.completed_tasks_count) || 0
@@ -260,20 +257,22 @@ export async function PUT(
       `SELECT 
         b.*,
         p.name as project_name,
-        u.name as created_by_username,
         COUNT(DISTINCT c.id) as columns_count,
-        COUNT(DISTINCT t.id) as tasks_count
+        COUNT(DISTINCT t.id) as tasks_count,
+        COUNT(DISTINCT CASE WHEN t.status = 'done' THEN t.id END) as completed_tasks_count
       FROM boards b
       LEFT JOIN projects p ON b.project_id = p.id
-      LEFT JOIN users u ON b.created_by = u.id
       LEFT JOIN columns c ON b.id = c.board_id
       LEFT JOIN tasks t ON b.id = t.board_id
       WHERE b.id = $1
-      GROUP BY b.id, p.name, u.name`,
+      GROUP BY b.id, p.name`,
       [boardId]
     );
 
     const row = boardResult[0] as any;
+    // В SQLite у boards нет created_by, используем создателя проекта
+    const project2 = await databaseAdapter.getProjectById(row.project_id);
+
     const updatedBoard: BoardWithStats = {
       id: row.id,
       name: row.name,
@@ -287,9 +286,9 @@ export async function PUT(
       settings: row.settings,
       created_at: row.created_at,
       updated_at: row.updated_at,
-      created_by: row.created_by,
+      created_by: project2?.created_by || project2?.creator_id || '',
       project_name: row.project_name,
-      created_by_username: row.created_by_username,
+      created_by_username: 'admin',
       columns_count: parseInt(row.columns_count) || 0,
       tasks_count: parseInt(row.tasks_count) || 0,
       completed_tasks_count: parseInt(row.completed_tasks_count) || 0

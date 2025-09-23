@@ -161,9 +161,32 @@ export async function POST(
       createdBy: authResult.user.userId,
     });
 
+    // Создаём колонки по умолчанию (совместимо с /api/boards)
+    const defaultColumns = [
+      { name: 'Беклог', color: '#F59E0B', position: 0, status: 'backlog' },
+      { name: 'К выполнению', color: '#6B7280', position: 1, status: 'todo' },
+      { name: 'В работе', color: '#3B82F6', position: 2, status: 'in_progress' },
+      { name: 'На проверке', color: '#8B5CF6', position: 3, status: 'review' },
+      { name: 'Выполнено', color: '#10B981', position: 4, status: 'done' },
+    ];
+
+    const createdColumns = [] as any[];
+    for (const col of defaultColumns) {
+      const created = await databaseAdapter.createColumn({
+        title: col.name, // нормализуется в adapter
+        name: col.name,  // на случай будущей логики
+        boardId: board.id,
+        position: col.position,
+        color: col.color,
+        status: col.status,
+        created_by: authResult.user.userId,
+      });
+      createdColumns.push(created);
+    }
+
     const result = {
       ...board,
-      columns: [],
+      columns: createdColumns,
     };
 
     return NextResponse.json({
