@@ -84,7 +84,15 @@ export async function GET(
       );
     }
 
-    return NextResponse.json(task);
+    // Подтягиваем исполнителей
+    const assigneesRes = await databaseAdapter.query(
+      `SELECT u.id, u.name, u.email FROM task_assignees ta JOIN users u ON u.id = ta.user_id WHERE ta.task_id = $1`,
+      [taskId]
+    );
+    const arows = Array.isArray(assigneesRes) ? assigneesRes : (assigneesRes as any).rows || [];
+    const assignees = arows.map((r: any) => ({ id: r.id, name: r.name || r.email }));
+
+    return NextResponse.json({ ...task, assignees });
   } catch (error) {
     console.error('Error fetching task:', error);
     console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
@@ -131,6 +139,9 @@ export async function PATCH(
     const body = await request.json();
     const validatedData = updateTaskSchema.parse(body);
 
+    // Собираем assignee_ids для обновления связей (если переданы)
+    const incomingAssigneeIds: string[] | undefined = body.assignee_ids || body.assigneeIds || (Array.isArray(body.assignees) ? body.assignees.map((a: any) => a.id) : undefined);
+
     // Получаем пользователя
     const user = await databaseAdapter.getUserByEmail(authResult.user.email);
     if (!user) {
@@ -172,7 +183,28 @@ export async function PATCH(
     // Обновляем задачу
     const updatedTask = await databaseAdapter.updateTask(taskId, validatedData);
 
-    return NextResponse.json(updatedTask);
+    // Если пришли исполнители — обновляем связи
+    if (incomingAssigneeIds) {
+      // Сначала очищаем прежние связи
+      await databaseAdapter.query(`DELETE FROM task_assignees WHERE task_id = $1`, [taskId]);
+      // Вставляем новые
+      for (const uid of incomingAssigneeIds) {
+        await databaseAdapter.query(
+          `INSERT INTO task_assignees (task_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+          [taskId, uid]
+        );
+      }
+    }
+
+    // Возвращаем задачу с актуальными исполнителями
+    const assigneesRes = await databaseAdapter.query(
+      `SELECT u.id, u.name, u.email FROM task_assignees ta JOIN users u ON u.id = ta.user_id WHERE ta.task_id = $1`,
+      [taskId]
+    );
+    const arows = Array.isArray(assigneesRes) ? assigneesRes : (assigneesRes as any).rows || [];
+    const assignees = arows.map((r: any) => ({ id: r.id, name: r.name || r.email }));
+
+    return NextResponse.json({ ...updatedTask, assignees });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

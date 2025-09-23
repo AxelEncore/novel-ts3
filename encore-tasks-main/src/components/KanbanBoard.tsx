@@ -547,6 +547,37 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
             setEditingTask(null);
             if (onTaskUpdate) onTaskUpdate();
           }}
+          onDelete={async (taskToDelete) => {
+            try {
+              const res = await fetch(`/api/tasks/${taskToDelete.id}`, {
+                method: 'DELETE',
+                credentials: 'include'
+              });
+              if (!res.ok) {
+                let errorText = '';
+                try {
+                  const ct = res.headers.get('content-type') || '';
+                  if (ct.includes('application/json')) {
+                    const j = await res.json();
+                    errorText = j?.error || JSON.stringify(j);
+                  } else {
+                    errorText = await res.text();
+                  }
+                } catch (_) {}
+                const msg = errorText || `Не удалось удалить задачу (HTTP ${res.status})`;
+                console.error('Delete failed:', res.status, msg);
+                if (typeof window !== 'undefined') alert(msg);
+                return;
+              }
+              // Удаляем локально
+              handleTaskDeleted(taskToDelete.id);
+              setShowTaskModal(false);
+              setEditingTask(null);
+            } catch (e) {
+              console.error('Ошибка удаления задачи:', e);
+              if (typeof window !== 'undefined') alert(`Ошибка удаления задачи: ${e instanceof Error ? e.message : String(e)}`);
+            }
+          }}
         />
       )}
 

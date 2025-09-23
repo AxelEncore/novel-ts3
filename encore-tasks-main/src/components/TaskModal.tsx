@@ -13,7 +13,9 @@ import {
   MessageSquare,
   Plus,
   Trash2,
-  Save } from
+  Save,
+  Pencil,
+  Eye } from
 "lucide-react";
 import { CustomSelect } from "./CustomSelect";
 import { MultiSelect } from "./MultiSelect";
@@ -24,6 +26,7 @@ interface TaskModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (task: Task) => void;
+  onDelete?: (task: Task) => void;
 }
 
 const priorityOptions: {value: TaskPriority;label: string;color: string;}[] =
@@ -48,11 +51,12 @@ const statusColors: Record<string, string> = {
 };
 
 
-export function TaskModal({ task, isOpen, onClose, onSave }: TaskModalProps) {
+export function TaskModal({ task, isOpen, onClose, onSave, onDelete }: TaskModalProps) {
   const { state, dispatch, updateTask } = useApp();
   const [editedTask, setEditedTask] = useState<Task>(task);
   const [newComment, setNewComment] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
     setEditedTask(task);
@@ -69,7 +73,7 @@ export function TaskModal({ task, isOpen, onClose, onSave }: TaskModalProps) {
               file.type.includes('pdf') || file.type.includes('document') ? 'document' as const : 
               'other' as const,
         size: file.size,
-        uploadedBy: state.currentUser$3.id || '',
+uploadedBy: state.currentUser?.id || '',
         uploadedAt: new Date()
       }));
       
@@ -122,6 +126,7 @@ export function TaskModal({ task, isOpen, onClose, onSave }: TaskModalProps) {
       };
       
       await updateTask(editedTask.id, updatedTask);
+      onSave?.(updatedTask);
       onClose();
     } catch (error) {
       console.error('Failed to update task:', error);
@@ -146,7 +151,7 @@ export function TaskModal({ task, isOpen, onClose, onSave }: TaskModalProps) {
   };
 
   // Преобразуем ProjectMember[] в User[] для MultiSelect
-  const availableUsers = (state.selectedProject$1.members || []).map(member => ({
+const availableUsers = ((state.selectedProject?.members as any[]) || []).map((member: any) => ({
     id: member.userId,
     name: member.userId, // Временно используем userId как name
     email: '', // Пустой email
@@ -154,6 +159,20 @@ export function TaskModal({ task, isOpen, onClose, onSave }: TaskModalProps) {
     created_at: '',
     updated_at: ''
   }));
+
+  const canEdit = !!state.currentUser && ((state.currentUser as any).role === 'admin' || state.currentUser.id === task.creator_id);
+
+  const handleDelete = () => {
+    if (!canEdit) return;
+    if (typeof window !== 'undefined' && confirm('Удалить задачу?')) {
+      try {
+        onDelete?.(editedTask);
+        onClose();
+      } catch (e) {
+        console.error('Failed to delete task', e);
+      }
+    }
+  };
 
   return (
     <div
@@ -170,156 +189,244 @@ export function TaskModal({ task, isOpen, onClose, onSave }: TaskModalProps) {
           data-oid="ktojc2t">
 
           <h2 className="text-xl font-semibold text-white" data-oid="-pvm16q">
-            Редактирование задачи
+            {isEditing ? 'Редактирование задачи' : 'Детали задачи'}
           </h2>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-            data-oid="d2gg2sp">
-
-            <X className="w-5 h-5 text-gray-400" data-oid="be2lgo5" />
-          </button>
+          <div className="flex items-center gap-2">
+            {canEdit && (
+              <>
+                <button
+                  onClick={() => setIsEditing(v => !v)}
+                  className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                  title={isEditing ? 'Режим просмотра' : 'Редактировать'}>
+                  {isEditing ? (
+                    <Eye className="w-5 h-5 text-gray-400" />
+                  ) : (
+                    <Pencil className="w-5 h-5 text-gray-400" />
+                  )}
+                </button>
+                <button
+                  onClick={handleDelete}
+                  className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                  title="Удалить задачу">
+                  <Trash2 className="w-5 h-5 text-red-400" />
+                </button>
+              </>
+            )}
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+              data-oid="d2gg2sp">
+              <X className="w-5 h-5 text-gray-400" data-oid="be2lgo5" />
+            </button>
+          </div>
         </div>
 
         <div className="flex h-[calc(90vh-80px)]" data-oid="l200d2:">
           {/* Main content */}
-          <div className="flex-1 p-6 overflow-y-auto" data-oid="0yg709e">
+          <div className="flex-1 p-6 overflow-y-auto relative" data-oid="0yg709e">
             {/* Title */}
             <div className="mb-6" data-oid="fxsuh7d">
-              <label
-                className="block text-sm font-medium text-gray-300 mb-2"
-                data-oid=":ubc.od">
-
-                Название задачи
-              </label>
-              <input
-                type="text"
-                value={editedTask.title}
-                onChange={(e) =>
-                setEditedTask({ ...editedTask, title: e.target.value })
-                }
-                className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
-                placeholder="Введите название задачи"
-                data-oid="4b-h4w1" />
-
+              {isEditing ? (
+                <>
+                  <label
+                    className="block text-sm font-medium text-gray-300 mb-2"
+                    data-oid=":ubc.od">
+                    Название задачи
+                  </label>
+                  <input
+                    type="text"
+                    value={editedTask.title}
+                    onChange={(e) =>
+                      setEditedTask({ ...editedTask, title: e.target.value })
+                    }
+                    className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
+                    placeholder="Введите название задачи"
+                    data-oid="4b-h4w1" />
+                </>
+              ) : (
+                <h2 className="text-2xl font-semibold text-white">{editedTask.title}</h2>
+              )}
             </div>
 
             {/* Description */}
             <div className="mb-6" data-oid="q4k0.uw">
-              <label
-                className="block text-sm font-medium text-gray-300 mb-2"
-                data-oid="3oa_2fy">
-
-                Описание
-              </label>
-              <textarea
-                value={editedTask.description || ""}
-                onChange={(e) =>
-                setEditedTask({ ...editedTask, description: e.target.value })
-                }
-                rows={4}
-                className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500 resize-none"
-                placeholder="Добавьте описание задачи"
-                data-oid="5:ze-bw" />
-
+              {isEditing ? (
+                <>
+                  <label
+                    className="block text-sm font-medium text-gray-300 mb-2"
+                    data-oid="3oa_2fy">
+                    Описание
+                  </label>
+                  <textarea
+                    value={editedTask.description || ""}
+                    onChange={(e) =>
+                      setEditedTask({ ...editedTask, description: e.target.value })
+                    }
+                    rows={4}
+                    className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500 resize-none"
+                    placeholder="Добавьте описание задачи"
+                    data-oid="5:ze-bw" />
+                </>
+              ) : (
+                <div>
+                  <h3 className="block text-sm font-medium text-gray-300 mb-2">Описание</h3>
+                  <div className="px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-gray-200 whitespace-pre-wrap">
+                    {editedTask.description || "Описание отсутствует"}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Properties */}
             <div
               className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6"
               data-oid="26u4lyl">
+              {isEditing ? (
+                <>
+                  {/* Assignees */}
+                  <div data-oid="frcbsgd">
+                    <label
+                      className="block text-sm font-medium text-gray-300 mb-2"
+                      data-oid="folklz:">
+                      Исполнители
+                    </label>
+                    <MultiSelect
+                      value={editedTask.assignees || []}
+                      onChange={(users) => {
+                        setEditedTask({ 
+                          ...editedTask, 
+                          assignees: users
+                        });
+                      }}
+                      options={availableUsers}
+                      placeholder="Выберите исполнителей"
+                    />
+                  </div>
 
-              {/* Assignees */}
-              <div data-oid="frcbsgd">
-                <label
-                  className="block text-sm font-medium text-gray-300 mb-2"
-                  data-oid="folklz:">
+                  {/* Priority */}
+                  <div data-oid="vwb1low">
+                    <label
+                      className="block text-sm font-medium text-gray-300 mb-2"
+                      data-oid="t.69qd2">
+                      Приоритет
+                    </label>
+                    <CustomSelect
+                      value={editedTask.priority}
+                      onChange={(value) =>
+                        setEditedTask({
+                          ...editedTask,
+                          priority: value as TaskPriority
+                        })
+                      }
+                      options={priorityOptions.map((option) => ({
+                        value: option.value,
+                        label: option.label
+                      }))}
+                      placeholder="Выберите приоритет"
+                    />
+                  </div>
 
-                  Исполнители
-                </label>
-                <MultiSelect
-                  value={editedTask.assignees || []}
-                  onChange={(users) => {
-                    setEditedTask({ 
-                      ...editedTask, 
-                      assignees: users
-                    });
-                  }}
-                  options={availableUsers}
-                  placeholder="Выберите исполнителей"
-                />
-              </div>
+                  {/* Deadline */}
+                  <div data-oid="ppr_wxo">
+                    <label
+                      className="block text-sm font-medium text-gray-300 mb-2"
+                      data-oid="hhl_o2h">
+                      Дедлайн
+                    </label>
+                    <input
+                      type="date"
+                      value={
+                        editedTask.due_date ? editedTask.due_date.split("T")[0] :
+                        ""
+                      }
+                      onChange={(e) => {
+                        const dateString = e.target.value || undefined;
+                        setEditedTask({ ...editedTask, due_date: dateString });
+                      }}
+                      className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-primary-500"
+                      data-oid="esq072m" />
+                  </div>
 
-              {/* Priority */}
-              <div data-oid="vwb1low">
-                <label
-                  className="block text-sm font-medium text-gray-300 mb-2"
-                  data-oid="t.69qd2">
+                  {/* Tags */}
+                  <div data-oid="-q29zox">
+                    <label
+                      className="block text-sm font-medium text-gray-300 mb-2"
+                      data-oid="43e09wy">
+                      Теги
+                    </label>
+                    <input
+                      type="text"
+                      value={(editedTask.tags || []).join(", ") || ""}
+                      onChange={(e) => {
+                        const tags = e.target.value
+                          .split(",")
+                          .map((tag) => tag.trim())
+                          .filter(Boolean);
+                        setEditedTask({ ...editedTask, tags });
+                      }}
+                      className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
+                      placeholder="Введите теги через запятую"
+                      data-oid="wh370-5" />
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Assignees view */}
+                  <div>
+                    <h3 className="block text-sm font-medium text-gray-300 mb-2">Исполнители</h3>
+                    {(editedTask.assignees && editedTask.assignees.length > 0) ? (
+                      <div className="flex flex-wrap gap-2">
+                        {editedTask.assignees.map((u) => (
+                          <div key={u.id} className="flex items-center gap-2 px-2 py-1 rounded bg-white/5 border border-white/10">
+                            {(u as any).avatar ? (
+                              <img src={(u as any).avatar} alt={u.name} className="w-6 h-6 rounded-full" />
+                            ) : (
+                              <div className="w-6 h-6 rounded-full bg-primary-500 text-white text-xs flex items-center justify-center">{getInitials(u.name || u.id)}</div>
+                            )}
+                            <span className="text-sm text-white">{u.name || u.id}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-sm text-gray-400">Не назначены</span>
+                    )}
+                  </div>
 
-                  Приоритет
-                </label>
-                <CustomSelect
-                  value={editedTask.priority}
-                  onChange={(value) =>
-                  setEditedTask({
-                    ...editedTask,
-                    priority: value as TaskPriority
-                  })
-                  }
-                  options={priorityOptions.map((option) => ({
-                    value: option.value,
-                    label: option.label
-                  }))}
-                  placeholder="Выберите приоритет"
-                />
-              </div>
+                  {/* Priority view */}
+                  <div>
+                    <h3 className="block text-sm font-medium text-gray-300 mb-2">Приоритет</h3>
+                    {(() => {
+                      const p = priorityOptions.find(o => o.value === editedTask.priority);
+                      return (
+                        <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm border border-white/10 bg-white/5 text-white">
+                          <span className={cn("w-2 h-2 rounded-full", p?.color)} />
+                          {p?.label || 'Не указан'}
+                        </span>
+                      );
+                    })()}
+                  </div>
 
-              {/* Deadline */}
-              <div data-oid="ppr_wxo">
-                <label
-                  className="block text-sm font-medium text-gray-300 mb-2"
-                  data-oid="hhl_o2h">
+                  {/* Deadline view */}
+                  <div>
+                    <h3 className="block text-sm font-medium text-gray-300 mb-2">Дедлайн</h3>
+                    <span className="text-white">{editedTask.due_date ? formatDate(new Date(editedTask.due_date)) : 'Не указан'}</span>
+                  </div>
 
-                  Дедлайн
-                </label>
-                <input
-                  type="date"
-                  value={
-                  editedTask.due_date ? editedTask.due_date.split("T")[0] :
-                  ""
-                  }
-                  onChange={(e) => {
-                    const dateString = e.target.value || undefined;
-                    setEditedTask({ ...editedTask, due_date: dateString });
-                  }}
-                  className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-primary-500"
-                  data-oid="esq072m" />
-
-              </div>
-
-              {/* Tags */}
-              <div data-oid="-q29zox">
-                <label
-                  className="block text-sm font-medium text-gray-300 mb-2"
-                  data-oid="43e09wy">
-
-                  Теги
-                </label>
-                <input
-                  type="text"
-                  value={editedTask.tags$1.join(", ") || ""}
-                  onChange={(e) => {
-                    const tags = e.target.value.
-                    split(",").
-                    map((tag) => tag.trim()).
-                    filter(Boolean);
-                    setEditedTask({ ...editedTask, tags });
-                  }}
-                  className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
-                  placeholder="Введите теги через запятую"
-                  data-oid="wh370-5" />
-
-              </div>
+                  {/* Tags view */}
+                  <div>
+                    <h3 className="block text-sm font-medium text-gray-300 mb-2">Теги</h3>
+                    {(editedTask.tags && editedTask.tags.length > 0) ? (
+                      <div className="flex flex-wrap gap-2">
+                        {editedTask.tags.map((tag) => (
+                          <span key={tag} className="px-2 py-1 rounded-full text-sm bg-white/10 text-white border border-white/10">#{tag}</span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-sm text-gray-400">Нет тегов</span>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Comments */}
@@ -334,11 +441,11 @@ export function TaskModal({ task, isOpen, onClose, onSave }: TaskModalProps) {
               {/* Add comment */}
               <div className="mb-4" data-oid="475evbq">
                 <div className="flex gap-3" data-oid="-lc2a3c">
-                  {state.settings$1.showAvatars && (
+                  {state.settings?.showAvatars && (
                     <div className="flex-shrink-0" data-oid="ky0_ms0">
-                      {state.currentUser$1.avatar ? <img
-                        src={state.currentUser.avatar}
-                        alt={state.currentUser.name}
+                      {state.currentUser?.avatar ? <img
+                        src={state.currentUser?.avatar}
+                        alt={state.currentUser?.name || ""}
                         className="w-8 h-8 rounded-full"
                         data-oid="atbpn0_" /> :
 
@@ -348,7 +455,7 @@ export function TaskModal({ task, isOpen, onClose, onSave }: TaskModalProps) {
                         data-oid="luwz7cn">
 
                           {state.currentUser ? getInitials(state.currentUser.name) :
-                        "$1"}
+                        "?"}
                         </div>
                       }
                     </div>
@@ -379,7 +486,7 @@ export function TaskModal({ task, isOpen, onClose, onSave }: TaskModalProps) {
 
               {/* Comments list */}
               <div className="space-y-4" data-oid="ot-bjl:">
-                {editedTask.comments$1.map((comment) =>
+                {(editedTask.comments || []).map((comment) =>
                 <div
                   key={comment.id}
                   className="flex gap-3"
@@ -452,7 +559,7 @@ export function TaskModal({ task, isOpen, onClose, onSave }: TaskModalProps) {
                     "inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border",
                     statusColors[editedTask.status] || "bg-gray-500/20 text-gray-300 border-gray-500/30"
                   )}>
-                    {statusLabels[editedTask.status] || editedTask.status$1.replace("-", " ") || "Не указан"}
+                    {statusLabels[editedTask.status] || (editedTask.status ? editedTask.status.replace("-", " ") : "Не указан") || "Не указан"}
                   </span>
                 </div>
               </div>
@@ -473,7 +580,7 @@ export function TaskModal({ task, isOpen, onClose, onSave }: TaskModalProps) {
                   Автор:
                 </span>
                 <p className="text-white" data-oid="blsrf4i">
-                  {state.users.find(u => u.id === editedTask.creator_id)$1.name || editedTask.creator_username || 'Неизвестный пользователь'}
+                  {state.users.find((u: any) => u.id === editedTask.creator_id)?.name || editedTask.creator_username || 'Неизвестный пользователь'}
                 </p>
               </div>
 
@@ -487,7 +594,7 @@ export function TaskModal({ task, isOpen, onClose, onSave }: TaskModalProps) {
                     Вложения:
                   </span>
                   <button
-                    onClick={() => fileInputRef.current$1.click()}
+                    onClick={() => fileInputRef.current?.click()}
                     className="p-1 hover:bg-white/10 rounded transition-colors"
                     title="Добавить вложение"
                     data-oid="-g-tqxr">
@@ -506,12 +613,12 @@ export function TaskModal({ task, isOpen, onClose, onSave }: TaskModalProps) {
                     accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.gif,.zip,.rar"
                   />
                 </div>
-                {(editedTask.attachments$1.length || 0) === 0 ? <p className="text-sm text-gray-500" data-oid="_-6em6z">
+                {(editedTask.attachments?.length || 0) === 0 ? <p className="text-sm text-gray-500" data-oid="_-6em6z">
                     Нет вложений
                   </p> :
 
                 <div className="space-y-2" data-oid="ojm172r">
-                    {editedTask.attachments$1.map((attachment) =>
+                    {(editedTask.attachments || []).map((attachment) =>
                   <div
                     key={attachment.id}
                     className="flex items-center justify-between gap-2 p-2 bg-white/5 rounded hover:bg-white/10 transition-colors"
@@ -548,14 +655,16 @@ export function TaskModal({ task, isOpen, onClose, onSave }: TaskModalProps) {
 
             {/* Actions */}
             <div className="mt-8 space-y-3" data-oid="9-lejip">
-              <button
-                onClick={handleSave}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors"
-                data-oid="pc_b6cs">
-
-                <Save className="w-4 h-4" data-oid="q6bf507" />
-                Сохранить
-              </button>
+              {isEditing && (
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors"
+                  data-oid="pc_b6cs">
+                  <Save className="w-4 h-4" data-oid="q6bf507" />
+                  Сохранить
+                </button>
+              )}
               <button
                 onClick={onClose}
                 className="w-full px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-colors"
