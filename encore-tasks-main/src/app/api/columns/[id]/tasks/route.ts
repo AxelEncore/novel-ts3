@@ -66,7 +66,18 @@ export async function GET(
 
     const tasks = await databaseAdapter.getColumnTasks(columnId);
 
-    return NextResponse.json({ column, tasks });
+    // Подтягиваем исполнителей для каждой задачи
+    const tasksWithAssignees = [] as any[];
+    for (const t of tasks as any[]) {
+      const ares = await databaseAdapter.query(
+        `SELECT u.id, u.name, u.email FROM task_assignees ta JOIN users u ON u.id = ta.user_id WHERE ta.task_id = $1`,
+        [t.id]
+      );
+      const arows = Array.isArray(ares) ? ares : (ares as any).rows || [];
+      tasksWithAssignees.push({ ...t, assignees: arows.map((r: any) => ({ id: r.id, name: r.name || r.email })) });
+    }
+
+    return NextResponse.json({ column, tasks: tasksWithAssignees });
   } catch (error) {
     console.error('Error fetching column tasks:', error);
     return NextResponse.json(

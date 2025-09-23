@@ -187,6 +187,18 @@ export async function GET(request: NextRequest) {
     queryParams.push(limit, offset);
     const tasksResult = await databaseAdapter.query(tasksQuery, queryParams);
 
+    // Для каждого таска подтягиваем исполнителей
+    const tasksData = Array.isArray(tasksResult) ? tasksResult : tasksResult?.rows || [];
+    const tasksWithAssignees: any[] = [];
+    for (const row of tasksData) {
+      const ares = await databaseAdapter.query(
+        `SELECT u.id, u.name, u.email FROM task_assignees ta JOIN users u ON u.id = ta.user_id WHERE ta.task_id = $1`,
+        [row.id]
+      );
+      const arows = Array.isArray(ares) ? ares : (ares as any).rows || [];
+      tasksWithAssignees.push({ ...row, assignees: arows.map((r: any) => ({ id: r.id, name: r.name || r.email })) });
+    }
+
     // Запрос для подсчета общего количества
     const countQuery = `
       SELECT COUNT(t.id) as total
@@ -210,8 +222,7 @@ export async function GET(request: NextRequest) {
     );
 
     // Обработка результата задач (может быть массивом или объектом с rows)
-    const tasksData = Array.isArray(tasksResult) ? tasksResult : tasksResult?.rows || [];
-    const tasks: TaskWithDetails[] = tasksData.map((row: any) => ({
+    const tasks: TaskWithDetails[] = tasksWithAssignees.map((row: any) => ({
       id: row.id,
       title: row.title,
       description: row.description,
@@ -226,7 +237,8 @@ export async function GET(request: NextRequest) {
       board_name: row.board_name,
       project_name: null,
       created_by_username: null,
-      assignee_usernames: []
+      assignee_usernames: (row.assignees || []).map((a: any) => a.name),
+      assignees: (row.assignees || [])
     }));
 
     // Генерируем ETag для кэширования
@@ -413,15 +425,15 @@ statusByColumn,
       
       const newTask = { id: createdTaskId };
 
-      // Назначаем исполнителей, если указаны (пока таблица task_assignees не создана)
-      // if (taskData.assignee_ids && taskData.assignee_ids.length > 0) {
-      //   for (const assigneeId of taskData.assignee_ids) {
-      //     await databaseAdapter.query(
-      //       'INSERT INTO task_assignees (task_id, user_id, assigned_by) VALUES ($1, $2, $3)',
-      //       [taskId, assigneeId, authResult.user.userId]
-      //     );
-      //   }
-      // }
+      // Назначаем исполнителей, если указаны
+      if (taskData.assignee_ids && taskData.assignee_ids.length > 0) {
+        for (const assigneeId of taskData.assignee_ids) {
+          await databaseAdapter.query(
+            'INSERT INTO task_assignees (task_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+            [taskId, assigneeId]
+          );
+        }
+      }
 
       // Добавляем теги, если указаны
       if (taskData.tag_ids && taskData.tag_ids.length > 0) {
@@ -492,8 +504,15 @@ statusByColumn,
       );
       const projectRows = Array.isArray(projectResult) ? projectResult : (projectResult.rows || []);
       
-      // Получаем исполнителей задачи (пока таблица task_assignees не создана)
-      const assigneesResult = { rows: [] };
+      // Получаем исполнителей задачи
+      const assigneesResult = await databaseAdapter.query(
+        `SELECT u.id, u.name, u.email 
+         FROM task_assignees ta 
+         JOIN users u ON u.id = ta.user_id 
+         WHERE ta.task_id = $1`,
+        [createdTaskId]
+      );
+      const assigneeRows = Array.isArray(assigneesResult) ? assigneesResult : (assigneesResult as any).rows || [];
       
       const createdTask: TaskWithDetails = {
         id: task.id,
@@ -517,10 +536,10 @@ statusByColumn,
         board_name: boardRows[0]?.name || '',
         project_name: projectRows[0]?.name || '',
         created_by_username: creatorRows[0]?.name || '',
-        assignees: assigneesResult.rows.map(row => ({
+        assignees: assigneeRows.map((row: any) => ({
           id: row.id,
-          username: row.username,
-          name: row.name
+          username: row.username || row.email || row.name,
+          name: row.name || row.email || row.username || 'User'
         })),
         tags: [],
         comments_count: 0,

@@ -5,6 +5,7 @@ import { useApp } from '@/contexts/AppContext';
 import { toast } from 'sonner';
 import KanbanColumnDark from './KanbanColumnDark';
 import CreateTaskModal from './CreateTaskModal';
+import { TaskModal } from './TaskModal';
 
 interface KanbanBoardProps {
   board: Board;
@@ -75,6 +76,8 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
   const [loading, setLoading] = useState(false);
   const [showCreateTask, setShowCreateTask] = useState(false);
   const [selectedColumn, setSelectedColumn] = useState<Column | null>(null);
+  const [editingTask, setEditingTask] = useState<any | null>(null);
+  const [showTaskModal, setShowTaskModal] = useState(false);
   
   // Получаем соответствие колонок со статусами
   const statusMapping = getColumnStatusMapping(columns);
@@ -493,6 +496,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
               onTaskUpdate={handleTaskUpdated}
               onTaskDelete={handleTaskDeleted}
               onTaskComplete={(task) => handleTaskComplete(task)}
+              onTaskOpen={(task) => { setEditingTask(task); setShowTaskModal(true); }}
               onDragStart={(e, type, item) => handleDragStart(e, type, item)}
               onDragOver={(e) => handleDragOver(e, column.id)}
               onDrop={(e) => handleDrop(e, column.id)}
@@ -525,6 +529,24 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
           columnId={selectedColumn.id}
           boardId={board.id}
           users={projectMembers.length > 0 ? projectMembers : users}
+        />
+      )}
+
+      {showTaskModal && editingTask && (
+        <TaskModal
+          task={editingTask}
+          isOpen={showTaskModal}
+          onClose={() => { setShowTaskModal(false); setEditingTask(null); }}
+          onSave={(updated) => {
+            // Обновляем задачу в локальном состоянии
+            setColumns(prev => prev.map(col => ({
+              ...col,
+              tasks: (col.tasks || []).map(t => t.id === updated.id ? { ...t, ...updated } : t)
+            })));
+            setShowTaskModal(false);
+            setEditingTask(null);
+            if (onTaskUpdate) onTaskUpdate();
+          }}
         />
       )}
 

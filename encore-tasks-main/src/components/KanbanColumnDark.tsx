@@ -17,6 +17,7 @@ interface KanbanColumnProps {
   onTaskUpdate: (task: any) => void;
   onTaskDelete: (taskId: number) => void;
   onTaskComplete?: (task: any) => void;
+  onTaskOpen?: (task: any) => void;
   onDragStart: (e: React.DragEvent, type: string, item: any) => void;
   onDragOver: (e: React.DragEvent) => void;
   onDrop: (e: React.DragEvent) => void;
@@ -84,6 +85,7 @@ const KanbanColumnDark: React.FC<KanbanColumnProps> = ({
   onTaskUpdate,
   onTaskDelete,
   onTaskComplete,
+  onTaskOpen,
   onDragStart,
   onDragOver,
   onDrop,
@@ -149,10 +151,11 @@ const KanbanColumnDark: React.FC<KanbanColumnProps> = ({
             tasks.map((task) => (
               <div
                 key={task.id}
-className="p-3 bg-white/5 backdrop-blur-sm border border-white/10 rounded-lg hover:bg-white/10 transition-all duration-200 cursor-move task-card fade-item animate-fade-in"
+                className="p-3 bg-white/5 backdrop-blur-sm border border-white/10 rounded-lg hover:bg-white/10 transition-all duration-200 cursor-pointer task-card fade-item animate-fade-in"
                 draggable
                 onDragStart={(e) => onDragStart(e, 'task', task)}
                 onDragEnd={onDragEnd}
+                onClick={() => onTaskOpen && onTaskOpen(task)}
               >
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex items-center gap-2">
