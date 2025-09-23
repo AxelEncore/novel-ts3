@@ -194,7 +194,23 @@ class DatabaseAdapter {
   // Column operations
   async createColumn(columnData: any): Promise<any> {
     await this.ensureInitialized();
-    return this.adapter.createColumn(columnData);
+
+    // Normalize payload for SQLite columns (expects title, board_id)
+    const normalized = {
+      title: columnData.title ?? columnData.name ?? undefined,
+      board_id: columnData.board_id ?? columnData.boardId ?? undefined,
+      position: columnData.position ?? 0,
+      color: columnData.color ?? '#6b7280',
+    } as any;
+
+    if (!normalized.title) {
+      throw new Error('Column title is required (missing title/name)');
+    }
+    if (!normalized.board_id) {
+      throw new Error('Column board_id is required (missing board_id/boardId)');
+    }
+
+    return this.adapter.createColumn(normalized);
   }
 
   async getColumnById(id: string): Promise<any> {
