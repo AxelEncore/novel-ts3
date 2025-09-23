@@ -488,6 +488,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
             loadProjects(),
             loadUsers()
           ]);
+
+          // Restore last opened project and board
+          try {
+            const savedProjectId = typeof window !== 'undefined' ? localStorage.getItem('encore-last-project-id') : null;
+            const savedBoardId = typeof window !== 'undefined' ? localStorage.getItem('encore-last-board-id') : null;
+
+            // Prefer saved project if exists in loaded projects; otherwise keep current or skip
+            const projects = (state.projects || []);
+            const targetProjectId = (savedProjectId && projects.find(p => p.id === savedProjectId)) ? savedProjectId : (projects[0]?.id || null);
+            if (targetProjectId) {
+              const targetProject = projects.find(p => p.id === targetProjectId);
+              if (targetProject) {
+                dispatch({ type: "SELECT_PROJECT", payload: targetProject });
+              }
+              // Load boards for project; loadBoards will prefer saved board
+              await loadBoards(targetProjectId);
+              // After boards loaded, try to select saved board (loadBoards handles it)
+            }
+          } catch (e) {
+            console.warn('Failed to restore last selection:', e);
+          }
         } else {
           console.log('❌ AppProvider: No authenticated user found');
         }
@@ -642,15 +663,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
         dispatch({ type: "SET_BOARDS", payload: boards });
         console.log('✅ AppContext: Boards set in state');
         
-        // Автоматически выбираем первую доску, если нет выбранной доски или она не принадлежит текущему проекту
+        // Автоматически выбираем сохранённую доску, если она существует; иначе первую
         if (boards.length > 0) {
+          let preferredBoard: any | null = null;
+          try {
+            const savedBoardId = typeof window !== 'undefined' ? localStorage.getItem('encore-last-board-id') : null;
+            if (savedBoardId) {
+              preferredBoard = boards.find(b => b.id === savedBoardId) || null;
+            }
+          } catch {}
+
           const currentSelectedBoard = state.selectedBoard;
           const shouldSelectNewBoard = !currentSelectedBoard || 
             !boards.find(board => board.id === currentSelectedBoard.id);
           
           if (shouldSelectNewBoard) {
-            console.log('🎯 AppContext: Auto-selecting first board:', boards[0].name);
-            dispatch({ type: "SELECT_BOARD", payload: boards[0] });
+            const toSelect = preferredBoard || boards[0];
+            console.log('🎯 AppContext: Selecting board:', toSelect?.name);
+            if (toSelect) dispatch({ type: "SELECT_BOARD", payload: toSelect });
           } else {
             console.log('🎯 AppContext: Keeping current board selection');
           }
@@ -1064,6 +1094,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return false;
     }
   };
+
+  // Persist last selected project/board
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      if (state.selectedProject?.id) {
+        localStorage.setItem('encore-last-project-id', state.selectedProject.id);
+      }
+    } catch {}
+  }, [state.selectedProject?.id]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      if (state.selectedBoard?.id) {
+        localStorage.setItem('encore-last-board-id', state.selectedBoard.id);
+      }
+    } catch {}
+  }, [state.selectedBoard?.id]);
 
   const contextValue = {
     state,
