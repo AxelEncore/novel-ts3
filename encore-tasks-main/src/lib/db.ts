@@ -11,59 +11,59 @@ if (typeof window === 'undefined') {
   databaseAdapter = dbAdapter;
 }
 
-// Флаг доступности PostgreSQL
-let postgreSQLConnectionStatus = false;
+// Флаг доступности SQLite
+let sqliteConnectionStatus = false;
 
-// Проверка подключения к PostgreSQL
-async function checkPostgreSQLConnection() {
+// Проверка подключения к SQLite
+async function checkSQLiteConnection() {
   try {
     await databaseAdapter.initialize();
-    postgreSQLConnectionStatus = true;
-    console.log('✅ PostgreSQL подключение установлено');
+    sqliteConnectionStatus = true;
+    console.log('✅ SQLite подключение установлено');
     return true;
   } catch (error) {
-    postgreSQLConnectionStatus = false;
-    console.log('❌ PostgreSQL недоступен:', (error as Error).message);
+    sqliteConnectionStatus = false;
+    console.log('❌ SQLite недоступен:', (error as Error).message);
     return false;
   }
 }
 
-// Функция для получения статуса PostgreSQL
-export function getPostgreSQLAvailability(): boolean {
-  return postgreSQLConnectionStatus;
+// Функция для получения статуса SQLite
+export function getSQLiteAvailability(): boolean {
+  return sqliteConnectionStatus;
 }
 
-// Функция для выполнения запросов (PostgreSQL API)
+// Функция для выполнения запросов (SQLite API)
 export async function query(text: string, params?: any[]) {
   try {
-    if (!postgreSQLConnectionStatus) {
-      await checkPostgreSQLConnection();
+    if (!sqliteConnectionStatus) {
+      await checkSQLiteConnection();
     }
     
-    if (!postgreSQLConnectionStatus) {
-      // Возвращаем пустой результат, если PostgreSQL недоступен
+    if (!sqliteConnectionStatus) {
+      // Возвращаем пустой результат, если SQLite недоступен
       return { rows: [], rowCount: 0 };
     }
     
-    // Выполняем SQL запрос через PostgreSQL адаптер
+    // Выполняем SQL запрос через SQLite адаптер
     const result = await databaseAdapter.query(text, params);
-    return { rows: result, rowCount: result.length };
+    return { rows: result.rows || result, rowCount: result.rowCount || result.length };
   } catch (error) {
     console.error('Database query error:', error);
-    postgreSQLConnectionStatus = false;
+    sqliteConnectionStatus = false;
     // Возвращаем пустой результат для fallback
     return { rows: [], rowCount: 0 };
   }
 }
 
-// Функция для выполнения транзакций (PostgreSQL)
+// Функция для выполнения транзакций (SQLite)
 export async function transaction(callback: (client: any) => Promise<any>) {
   try {
-    // PostgreSQL транзакции через адаптер
+    // SQLite транзакции через адаптер
     const mockClient = {
       query: async (text: string, params?: any[]) => {
         const result = await databaseAdapter.query(text, params);
-        return { rows: result, rowCount: result.length };
+        return { rows: result.rows || result, rowCount: result.rowCount || result.length };
       }
     };
     return await callback(mockClient);
@@ -73,25 +73,25 @@ export async function transaction(callback: (client: any) => Promise<any>) {
 }
 
 // Инициализация подключения при загрузке модуля
-checkPostgreSQLConnection();
+checkSQLiteConnection();
 
 // Экспорт для совместимости
 export const pool = null;
 export const dbConfig = null;
 
-// Новые экспорты для PostgreSQL
+// Новые экспорты для SQLite
 export { databaseAdapter };
-export function isPostgreSQLAvailable(): boolean {
-  return postgreSQLConnectionStatus;
-}
-
-// Обратная совместимость (deprecated)
-export function getSQLiteAvailability(): boolean {
-  console.warn('getSQLiteAvailability() is deprecated, use getPostgreSQLAvailability() instead');
-  return postgreSQLConnectionStatus;
-}
-
 export function isSQLiteAvailable(): boolean {
-  console.warn('isSQLiteAvailable() is deprecated, use isPostgreSQLAvailable() instead');
-  return isPostgreSQLAvailable();
+  return sqliteConnectionStatus;
+}
+
+// Обратная совместимость (deprecated) - теперь они указывают на SQLite
+export function getPostgreSQLAvailability(): boolean {
+  console.warn('getPostgreSQLAvailability() is deprecated, use getSQLiteAvailability() instead');
+  return sqliteConnectionStatus;
+}
+
+export function isPostgreSQLAvailable(): boolean {
+  console.warn('isPostgreSQLAvailable() is deprecated, use isSQLiteAvailable() instead');
+  return isSQLiteAvailable();
 }

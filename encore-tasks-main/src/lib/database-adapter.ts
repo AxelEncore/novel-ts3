@@ -3,15 +3,15 @@
 // =====================================================
 
 import { User, Project, Board, Column, Task, Session } from '@/types';
-import { PostgreSQLAdapter } from './adapters/postgresql-adapter';
+import { SQLiteAdapter } from './adapters/sqlite-adapter';
 
 class DatabaseAdapter {
   private static instance: DatabaseAdapter;
-  private adapter: PostgreSQLAdapter;
+  private adapter: SQLiteAdapter;
   private isInitialized = false;
 
   constructor() {
-    this.adapter = new PostgreSQLAdapter();
+    this.adapter = new SQLiteAdapter();
   }
 
   public static getInstance(): DatabaseAdapter {
@@ -25,9 +25,9 @@ class DatabaseAdapter {
     try {
       await this.adapter.initialize();
       this.isInitialized = true;
-      console.log('✅ PostgreSQL connection established');
+      console.log('✅ SQLite connection established');
     } catch (error) {
-      console.error('❌ PostgreSQL connection failed:', error);
+      console.error('❌ SQLite connection failed:', error);
       throw new Error('Database initialization failed');
     }
   }
@@ -46,7 +46,7 @@ class DatabaseAdapter {
   }
 
   getDatabaseType(): string {
-    return 'postgresql';
+    return 'sqlite';
   }
 
   // =====================================================
