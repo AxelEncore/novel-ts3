@@ -118,7 +118,28 @@ class DatabaseAdapter {
   // Project operations
   async createProject(projectData: any): Promise<any> {
     await this.ensureInitialized();
-    return this.adapter.createProject(projectData);
+
+    // Normalize payload for the current DB (SQLite expects creator_id and icon)
+    const normalized = {
+      name: projectData.name,
+      description: projectData.description ?? '',
+      creator_id:
+        projectData.creator_id ??
+        projectData.created_by ??
+        projectData.user_id ??
+        undefined,
+      color: projectData.color ?? '#6366f1',
+      icon: projectData.icon ?? projectData.icon_url ?? 'folder',
+      // pass through optional fields in case adapter uses them in the future
+      telegram_chat_id: projectData.telegram_chat_id ?? null,
+      telegram_topic_id: projectData.telegram_topic_id ?? null,
+    } as any;
+
+    if (!normalized.creator_id) {
+      throw new Error('Creator id is required to create a project (missing creator_id / created_by)');
+    }
+
+    return this.adapter.createProject(normalized);
   }
 
   async getProjectById(id: string): Promise<any> {
