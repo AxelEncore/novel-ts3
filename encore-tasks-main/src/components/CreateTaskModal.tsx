@@ -6,7 +6,7 @@ import { format } from 'date-fns';
 interface CreateTaskModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onTaskCreated?: (task: Task, columnId: number) => void;
+  onTaskCreated?: (task: Task, columnId: string) => void;
   columnId: string | number;
   boardId: string;
   users: User[];
@@ -125,27 +125,10 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
         throw new Error(error.error || 'Failed to create task');
       }
 
-      const result = await response.json();
-      const newTask: Task = {
-        id: result.data?.task?.id || Math.random().toString(36).substr(2, 9),
-        title: formData.title.trim(),
-        description: formData.description.trim() || undefined,
-        priority: formData.priority,
-        status: 'todo',
-        project_id: '',
-        board_id: boardId,
-        column_id: columnId.toString(),
-        assignee_id: formData.assigneeIds.length > 0 ? formData.assigneeIds[0] : undefined,
-        reporter_id: '',
-        position: 0,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        due_date: formData.dueDate || undefined,
-        tags: formData.tags
-      };
+      const createdTask = await response.json();
 
       if (onTaskCreated) {
-        onTaskCreated(newTask, typeof columnId === 'string' ? parseInt(columnId) : columnId);
+        onTaskCreated(createdTask, typeof columnId === 'string' ? columnId : String(columnId));
       }
       onClose();
     } catch (error: any) {

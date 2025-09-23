@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { databaseAdapter } from '@/lib/adapters/postgresql-adapter';
+import { dbAdapter as databaseAdapter } from '@/lib/database-adapter';
 
 // Схема валидации для создания комментария
 const createCommentSchema = z.object({
@@ -13,7 +13,7 @@ const createCommentSchema = z.object({
 // GET /api/tasks/[id]/comments - Получение комментариев задачи
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -24,7 +24,7 @@ export async function GET(
       );
     }
 
-    const taskId = params.id;
+    const { id: taskId } = await params;
     if (!taskId) {
       return NextResponse.json(
         { error: 'Некорректный ID задачи' },
@@ -51,7 +51,7 @@ export async function GET(
     }
 
     // Проверяем доступ к проекту
-    const hasAccess = await databaseAdapter.hasProjectAccess(task.project_id, user.id);
+    const hasAccess = await databaseAdapter.hasProjectAccess(user.id, task.project_id);
     if (!hasAccess) {
       return NextResponse.json(
         { error: 'Нет доступа к задаче' },
@@ -75,7 +75,7 @@ export async function GET(
 // POST /api/tasks/[id]/comments - Создание комментария
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -86,7 +86,7 @@ export async function POST(
       );
     }
 
-    const taskId = params.id;
+    const { id: taskId } = await params;
     if (!taskId) {
       return NextResponse.json(
         { error: 'Некорректный ID задачи' },

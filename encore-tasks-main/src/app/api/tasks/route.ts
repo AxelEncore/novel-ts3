@@ -7,17 +7,17 @@ const databaseAdapter = dbAdapter;
 import { verifyAuth } from '@/lib/auth';
 import { CreateTaskDto, TaskWithDetails } from '@/types/core.types';
 
-// Схема валидации для создания задачи
+// Схема валидации для создания задачи (расслаблена под локальные ID и разные поля)
 const createTaskSchema = z.object({
   title: z.string().min(1, 'Заголовок задачи обязателен').max(200, 'Заголовок слишком длинный'),
   description: z.string().max(2000, 'Описание слишком длинное').optional(),
   column_id: z.string().min(1, 'ID колонки обязателен'),
-  assignee_ids: z.array(z.string().uuid('Неверный формат ID исполнителя')).optional(),
+  assignee_ids: z.array(z.string()).optional(),
   priority: z.enum(['low', 'medium', 'high', 'urgent']).default('medium'),
   status: z.enum(['todo', 'in_progress', 'review', 'done', 'deferred']).optional(),
-  due_date: z.string().datetime().optional(),
+  due_date: z.union([z.string(), z.date()]).optional(),
   estimated_hours: z.number().min(0).max(1000).optional(),
-  parent_task_id: z.string().uuid('Неверный формат ID родительской задачи').optional(),
+  parent_task_id: z.string().optional(),
   tags: z.array(z.string()).default([]),
   settings: z.record(z.string(), z.unknown()).optional()
 });
@@ -84,18 +84,31 @@ export async function GET(request: NextRequest) {
 
     // Проверка доступа
     let hasAccess = false;
+
+    // Админ всегда имеет доступ
+    const isAdmin = authResult.user.role === 'admin';
+
     if (columnId) {
-      const accessCheck = await checkTaskAccess(authResult.user.userId, columnId);
-      hasAccess = accessCheck.hasAccess;
+      // Определяем проект по колонке и проверяем доступ к проекту
+      const prj = await databaseAdapter.query(
+        `SELECT b.project_id FROM columns c JOIN boards b ON c.board_id = b.id WHERE c.id = $1`,
+        [columnId]
+      );
+      const rows = Array.isArray(prj) ? prj : (prj as any).rows || [];
+      const pid = rows[0]?.project_id;
+      hasAccess = isAdmin || (pid ? await databaseAdapter.hasProjectAccess(authResult.user.userId, pid) : false);
     } else if (boardId) {
-      const accessCheck = await checkTaskAccess(authResult.user.userId, null, boardId);
-      hasAccess = accessCheck.hasAccess;
+      const prj = await databaseAdapter.query(
+        `SELECT project_id FROM boards WHERE id = $1`,
+        [boardId]
+      );
+      const rows = Array.isArray(prj) ? prj : (prj as any).rows || [];
+      const pid = rows[0]?.project_id;
+      hasAccess = isAdmin || (pid ? await databaseAdapter.hasProjectAccess(authResult.user.userId, pid) : false);
     } else if (projectId) {
-      const accessCheck = await checkTaskAccess(authResult.user.userId, null, null, projectId);
-      hasAccess = accessCheck.hasAccess;
+      hasAccess = isAdmin || await databaseAdapter.hasProjectAccess(authResult.user.userId, projectId);
     } else if (assigneeId) {
-      // Пользователь может видеть свои задачи или если он админ
-      hasAccess = assigneeId === authResult.user.userId || authResult.user.role === 'admin';
+      hasAccess = isAdmin || (assigneeId === authResult.user.userId);
     } else {
       // Без фильтров показываем только задачи пользователя
       hasAccess = true;
@@ -266,8 +279,24 @@ export async function POST(request: NextRequest) {
     }
 
     await databaseAdapter.initialize();
-    const body = await request.json();
-    const validationResult = createTaskSchema.safeParse(body);
+
+    // Нормализация входных данных из разных клиентских форм
+    const raw = await request.json();
+    const normalizedBody = {
+      title: raw.title,
+      description: raw.description,
+      column_id: raw.column_id || raw.columnId,
+      assignee_ids: raw.assignee_ids || raw.assigneeIds || (raw.assigneeId ? [raw.assigneeId] : undefined),
+      priority: raw.priority,
+      status: raw.status,
+      due_date: raw.due_date || raw.dueDate,
+      estimated_hours: raw.estimated_hours || raw.estimatedHours,
+      parent_task_id: raw.parent_task_id || raw.parentTaskId,
+      tags: raw.tags,
+      settings: raw.settings,
+    } as any;
+
+    const validationResult = createTaskSchema.safeParse(normalizedBody);
 
     if (!validationResult.success) {
       return NextResponse.json(
@@ -280,7 +309,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const baseTaskData = validationResult.data;
+    const baseTaskData = validationResult.data as any;
 
     // Проверяем доступ к колонке
     console.log('Checking access for userId:', authResult.user.userId, 'columnId:', baseTaskData.column_id, 'type:', typeof baseTaskData.column_id);
@@ -294,7 +323,7 @@ export async function POST(request: NextRequest) {
 
     // Получаем информацию о колонке и доске
     const columnInfo = await databaseAdapter.query(
-      `SELECT c.id, c.board_id, b.project_id, b.name as board_name
+      `SELECT c.id, c.title as column_title, c.board_id, b.project_id, b.name as board_name
        FROM columns c 
        JOIN boards b ON c.board_id = b.id 
        WHERE c.id = $1`,
@@ -309,7 +338,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { board_id, project_id } = columnRows[0];
+    const { board_id, project_id, column_title } = columnRows[0] as any;
+
+    // Определяем статус по названию колонки
+    const titleLower = (column_title || '').toLowerCase();
+    const statusByColumn = titleLower.includes('выполнено') || titleLower.includes('done') ? 'done'
+      : titleLower.includes('проверк') || titleLower.includes('review') ? 'review'
+      : titleLower.includes('работе') || titleLower.includes('progress') || titleLower.includes('процессе') ? 'in_progress'
+      : titleLower.includes('беклог') || titleLower.includes('backlog') ? 'backlog'
+      : titleLower.includes('отлож') || titleLower.includes('deferred') ? 'deferred'
+      : 'todo';
     
     // Создаем полный объект taskData с необходимыми полями
     const taskData: CreateTaskDto = {
@@ -366,7 +404,7 @@ export async function POST(request: NextRequest) {
           taskData.priority,
           taskData.due_date ? new Date(taskData.due_date) : null,
           nextPosition,
-          'todo',
+statusByColumn,
           authResult.user.userId
         ]
       );
@@ -475,7 +513,7 @@ export async function POST(request: NextRequest) {
         created_at: task.created_at,
         updated_at: task.updated_at,
         created_by: authResult.user.userId,
-        column_name: columnRows[0]?.name || '',
+        column_name: columnRows[0]?.title || '',
         board_name: boardRows[0]?.name || '',
         project_name: projectRows[0]?.name || '',
         created_by_username: creatorRows[0]?.name || '',
@@ -490,14 +528,8 @@ export async function POST(request: NextRequest) {
         subtasks_count: 0
       };
 
-      return NextResponse.json(
-        {
-          success: true,
-          data: createdTask,
-          message: 'Задача успешно создана'
-        },
-        { status: 201 }
-      );
+      // Возвращаем объект задачи напрямую (совместимо с фронтендом)
+      return NextResponse.json(createdTask, { status: 201 });
 
     } catch (error) {
       throw error;

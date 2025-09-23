@@ -1,27 +1,9 @@
-// Refactored Database Adapter
-// This adapter provides a clean, consistent interface for database operations
+// Deprecated refactored PostgreSQL adapter
+// Re-export the main SQLite-backed database adapter for compatibility
 
-import { Pool, PoolClient } from 'pg';
-import { IDatabaseAdapter } from '../../business/interfaces';
+import { dbAdapter as databaseAdapter } from '../../../lib/database-adapter';
 
-export class RefactoredDatabaseAdapter implements IDatabaseAdapter {
-  private pool: Pool;
-  private isConnected = false;
-  private transactionActive = false;
-
-  constructor() {
-    // Initialize PostgreSQL connection pool
-    this.pool = new Pool({
-      host: process.env.DB_HOST || 'localhost',
-      port: parseInt(process.env.DB_PORT || '5432'),
-      database: process.env.DB_NAME || 'encore_tasks',
-      user: process.env.DB_USER || 'postgres',
-      password: process.env.DB_PASSWORD || 'password',
-      max: 20,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 2000,
-    });
-  }
+export { databaseAdapter };
 
   async connect(): Promise<void> {
     if (this.isConnected) return;

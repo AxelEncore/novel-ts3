@@ -123,24 +123,40 @@ export class SQLiteAdapter {
 
   async executeRawQuery(query: string, params: any[] = []): Promise<any> {
     try {
+      // Конвертируем плейсхолдеры вида $1, $2 ... в SQLite-плейсхолдеры '?'
+      let finalQuery = query;
+      const usesPgParams = /\$[0-9]+/.test(finalQuery);
+      if (usesPgParams) {
+        finalQuery = finalQuery.replace(/\$[0-9]+/g, '?');
+      }
+
       // Определяем тип запроса
-      const trimmedQuery = query.trim().toUpperCase();
+      const trimmedQuery = finalQuery.trim().toUpperCase();
+
+      // Конвертируем параметры в совместимые с SQLite типы
+      const finalParams = Array.isArray(params)
+        ? params.map((v) => {
+            if (v instanceof Date) return v.toISOString();
+            if (typeof v === 'boolean') return v ? 1 : 0;
+            return v as any;
+          })
+        : [];
       
       if (trimmedQuery.startsWith('SELECT')) {
-        const stmt = this.db.prepare(query);
-        const results = stmt.all(params);
+        const stmt = this.db.prepare(finalQuery);
+        const results = stmt.all(finalParams);
         return { rows: results, rowCount: results.length };
       } else if (trimmedQuery.startsWith('INSERT')) {
-        const stmt = this.db.prepare(query);
-        const result = stmt.run(params);
+        const stmt = this.db.prepare(finalQuery);
+        const result = stmt.run(finalParams);
         return { rows: [], rowCount: result.changes, lastInsertRowid: result.lastInsertRowid };
       } else if (trimmedQuery.startsWith('UPDATE') || trimmedQuery.startsWith('DELETE')) {
-        const stmt = this.db.prepare(query);
-        const result = stmt.run(params);
+        const stmt = this.db.prepare(finalQuery);
+        const result = stmt.run(finalParams);
         return { rows: [], rowCount: result.changes };
       } else {
         // Для других команд (CREATE, DROP и т.д.)
-        this.db.exec(query);
+        this.db.exec(finalQuery);
         return { rows: [], rowCount: 0 };
       }
     } catch (error) {
@@ -647,18 +663,38 @@ export class SQLiteAdapter {
   }
 
   async updateTask(id: string, updates: Partial<any>): Promise<any> {
-    const fields = [];
-    const values = [];
-    
+    const fields: string[] = [];
+    const values: any[] = [];
+
+    // Helper: camelCase -> snake_case
+    const toSnake = (s: string) => s.replace(/[A-Z]/g, m => `_${m.toLowerCase()}`);
+
+    // Map camelCase to snake_case where necessary
+    const fieldMapping: Record<string, string> = {
+      columnId: 'column_id',
+      boardId: 'board_id',
+      projectId: 'project_id',
+      assigneeId: 'assignee_id',
+      reporterId: 'reporter_id',
+      parentTaskId: 'parent_task_id',
+      dueDate: 'due_date',
+      completedAt: 'completed_at',
+      estimatedHours: 'estimated_hours',
+      actualHours: 'actual_hours',
+      createdBy: 'created_by',
+    };
+
     for (const [key, value] of Object.entries(updates)) {
-      if (key !== 'id') {
-        if (key === 'due_date' || key === 'completed_at') {
-          fields.push(`${key} = ?`);
-          values.push(this.dateToISO(value as Date));
-        } else {
-          fields.push(`${key} = ?`);
-          values.push(value);
-        }
+      if (key === 'id') continue;
+
+      const dbKey = fieldMapping[key] || toSnake(key); // generic fallback
+
+      if (dbKey === 'due_date' || dbKey === 'completed_at') {
+        fields.push(`${dbKey} = ?`);
+        values.push(this.dateToISO(value as Date));
+      } else {
+        fields.push(`${dbKey} = ?`);
+        values.push(value);
       }
     }
 
@@ -666,7 +702,7 @@ export class SQLiteAdapter {
       throw new Error('No fields to update');
     }
 
-    fields.push('updated_at = datetime(\'now\')');
+    fields.push("updated_at = datetime('now')");
     values.push(id);
 
     const query = `

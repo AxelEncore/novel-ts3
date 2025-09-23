@@ -1,7 +1,7 @@
 // =====================================================
 // КОНФИГУРАЦИЯ БАЗЫ ДАННЫХ
 // =====================================================
-// Пример конфигурации для подключения к PostgreSQL
+// Пример конфигурации для подключения к SQLite
 // Скопируйте этот файл в config.js и настройте под свою среду
 
 const config = {
@@ -187,9 +187,9 @@ function validateConfig(config) {
 
 // Функция для создания строки подключения
 function getDatabaseUrl(config) {
-  const { host, port, database, username, password } = config.database;
-  const auth = password ? `${username}:${password}` : username;
-  return `postgresql://${auth}@${host}:${port}/${database}`;
+  // For SQLite, the connection string points to a local file
+  const dbPath = process.env.DB_PATH || './database/encore_tasks.db';
+  return `sqlite:${dbPath}`;
 }
 
 // Экспорт

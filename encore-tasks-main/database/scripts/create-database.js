@@ -1,18 +1,12 @@
 #!/usr/bin/env node
 
 /**
- * Скрипт для создания базы данных Encore Tasks
- * 
- * Использование:
- *   node scripts/create-database.js [database_name]
- * 
- * Примеры:
- *   node scripts/create-database.js
- *   node scripts/create-database.js encore_tasks_test
+ * DEPRECATED: PostgreSQL database creation script.
+ * The project uses SQLite and creates the DB file automatically on first run.
  */
 
-const { Client } = require('pg');
-require('dotenv').config();
+console.log('Create-database script is deprecated (PostgreSQL). Using SQLite now.');
+process.exit(0);
 
 // Конфигурация подключения
 const config = {

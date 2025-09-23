@@ -80,19 +80,9 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
   const statusMapping = getColumnStatusMapping(columns);
   
   // Получаем задачи для конкретной колонки
+  // Доверяем серверу: /api/tasks?column_id=... уже возвращает задачи колонки
   const getTasksForColumn = (column: Column) => {
-    const expectedStatus = statusMapping[column.id];
-    if (!column.tasks) return [];
-    
-    // Фильтруем задачи по статусу
-    return column.tasks.filter(task => {
-      // Если у задачи есть статус, сравниваем его с ожидаемым
-      if (task.status) {
-        return task.status === expectedStatus;
-      }
-      // Если нет статуса, показываем все задачи в колонке
-      return true;
-    });
+    return column.tasks || [];
   };
   const [dragState, setDragState] = useState<DragState>({
     draggedTask: null,
@@ -169,17 +159,17 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
           data.columns.map(async (column: Column) => {
             try {
               const tasksResponse = await fetch(
-                `/api/tasks?column_id=${column.id}`,
+                `/api/columns/${column.id}/tasks`,
                 { credentials: 'include' }
               );
               
               if (tasksResponse.ok) {
                 const tasksData = await tasksResponse.json();
-                const tasks = tasksData.data?.tasks || tasksData.tasks || [];
+                const tasks = tasksData.tasks || tasksData.data?.tasks || [];
                 console.log(`Loaded ${tasks.length} tasks for column ${column.title || column.name}`);
                 return {
                   ...column,
-                  tasks: tasks
+                  tasks
                 };
               } else {
                 console.error(`Failed to load tasks for column ${column.id}`);

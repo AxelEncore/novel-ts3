@@ -103,11 +103,11 @@ const buildQueryString = (params: Record<string, unknown>): string => {
 };
 
 // Helper function to handle API requests
-const apiRequest = async <T>(url: string, options$1: RequestInit): Promise<T> => {
+const apiRequest = async <T>(url: string, options: RequestInit = {}): Promise<T> => {
   const response = await fetch(url, {
     headers: {
       'Content-Type': 'application/json',
-      ...options$1.headers,
+      ...(options.headers || {}),
     },
     ...options,
   });
@@ -178,24 +178,44 @@ export const useTasks = (options: UseTasksOptions = {}): UseTasksReturn => {
         search: debouncedSearch
       };
 
-      const queryParams = {
+      // Map filters to API expected keys
+      const qp: Record<string, unknown> = {
         page: currentPage,
         limit: pageSize,
-        ...queryFilters,
-        sortField: sort.field,
-        sortOrder: sort.order
+        search: queryFilters.search,
+        sort_by: sort.field === 'updatedAt' ? 'updated_at' : sort.field,
+        sort_order: sort.order,
       };
+      if (filters.projectId) qp['project_id'] = filters.projectId;
+      if (filters.boardId) qp['board_id'] = filters.boardId;
+      if (filters.columnId) qp['column_id'] = filters.columnId;
 
-      const queryString = buildQueryString(queryParams);
+      const queryString = buildQueryString(qp);
+      const url = `/api/tasks${queryString ? `?${queryString}` : ''}`;
       const response = await apiRequest<{
-        data: Task[];
-        total: number;
-        page: number;
-        totalPages: number;
-      }>(`/api/tasks$1${queryString}`);
+        success?: boolean;
+        data?: { tasks: Task[]; pagination?: any } | any;
+        total?: number;
+        page?: number;
+        totalPages?: number;
+      }>(url);
 
-      setTasks(response.data);
-      setTotalTasks(response.total);
+      // Support both {success,data:{tasks}} and direct arrays
+      let tasksData: Task[] = [];
+      let totalCount = 0;
+      if (Array.isArray(response)) {
+        tasksData = response as any;
+        totalCount = tasksData.length;
+      } else if ((response as any)?.data?.tasks) {
+        tasksData = (response as any).data.tasks;
+        totalCount = (response as any).data.pagination?.total ?? tasksData.length;
+      } else if ((response as any)?.data && Array.isArray((response as any).data)) {
+        tasksData = (response as any).data;
+        totalCount = (response as any).total ?? tasksData.length;
+      }
+
+      setTasks(tasksData);
+      setTotalTasks(totalCount);
     } catch (err) {
       console.error('Error loading tasks:', err);
       setError('Failed to load tasks. Please try again.');
@@ -229,21 +249,9 @@ export const useTasks = (options: UseTasksOptions = {}): UseTasksReturn => {
         body: JSON.stringify(data),
       });
       
-      // Add to current list if it matches filters
-      const matchesFilters = (
-        (!filters.projectId || newTask.projectId === filters.projectId) &&
-        (!filters.boardId || newTask.boardId === filters.boardId) &&
-        (!filters.columnId || newTask.columnId === filters.columnId) &&
-        (!filters.status || newTask.status === filters.status) &&
-        (!filters.priority || newTask.priority === filters.priority) &&
-        (!filters.assigneeId || newTask.assignees$1.some(a => a.id === filters.assigneeId)) &&
-        (filters.showArchived || !newTask.isArchived)
-      );
-
-      if (matchesFilters) {
-        setTasks(prev => [newTask, ...prev]);
-        setTotalTasks(prev => prev + 1);
-      }
+      // Optimistically add the new task to the list
+      setTasks(prev => [newTask, ...prev]);
+      setTotalTasks(prev => prev + 1);
 
       return newTask;
     } catch (err) {

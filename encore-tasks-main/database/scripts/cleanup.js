@@ -1,21 +1,13 @@
 #!/usr/bin/env node
 
 /**
- * Скрипт для очистки базы данных Encore Tasks
- * Удаляет устаревшие данные согласно политикам хранения
- * 
- * Использование:
- *   node scripts/cleanup.js [options]
- * 
- * Опции:
- *   --dry-run      Показать что будет удалено без фактического удаления
- *   --force        Принудительная очистка без подтверждения
- *   --logs-only    Очистить только логи активности
- *   --sessions-only Очистить только истекшие сессии
+ * DEPRECATED: PostgreSQL cleanup script. The project now uses SQLite.
+ * Cleanup of old data is either handled by the app or can be implemented
+ * via simple SQL against the SQLite database.
  */
 
-const { Pool } = require('pg');
-require('dotenv').config();
+console.log('Cleanup script is deprecated for PostgreSQL. Using SQLite now.');
+process.exit(0);
 
 // Централизованная конфигурация базы данных
 const dbConfig = {

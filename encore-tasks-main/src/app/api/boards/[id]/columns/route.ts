@@ -25,7 +25,7 @@ async function checkBoardAccess(boardId: string, userId: string) {
 // GET /api/boards/[id]/columns - Получить колонки доски
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const authResult = await verifyAuth(request);
@@ -37,7 +37,7 @@ export async function GET(
     }
 
     await databaseAdapter.initialize();
-    const boardId = params.id;
+    const { id: boardId } = await params;
 
     // Проверяем доступ к доске
     const accessCheck = await checkBoardAccess(boardId, authResult.user.userId);
@@ -76,7 +76,7 @@ export async function GET(
 // POST /api/boards/[id]/columns - Создать новую колонку
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const authResult = await verifyAuth(request);
@@ -88,7 +88,7 @@ export async function POST(
     }
 
     await databaseAdapter.initialize();
-    const boardId = params.id;
+    const { id: boardId } = await params;
     const body = await request.json();
 
     // Проверяем доступ к доске

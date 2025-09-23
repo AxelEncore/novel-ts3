@@ -1,56 +1,12 @@
 #!/usr/bin/env node
 
 /**
- * Скрипт миграции данных из SQLite в PostgreSQL
- * Использование: node scripts/migrate-sqlite-to-postgresql.js
+ * DEPRECATED: Migration from SQLite to PostgreSQL is no longer supported.
+ * The project standard is SQLite. This script remains as a placeholder.
  */
 
-const fs = require('fs');
-const path = require('path');
-const { Pool } = require('pg');
-const Database = require('better-sqlite3');
-require('dotenv').config();
-
-// Конфигурация PostgreSQL
-const pgConfig = {
-  host: process.env.POSTGRES_HOST || 'localhost',
-  port: parseInt(process.env.POSTGRES_PORT || '5432'),
-  database: process.env.POSTGRES_DB || 'encore_tasks',
-  user: process.env.POSTGRES_USER || 'postgres',
-  password: process.env.POSTGRES_PASSWORD || 'password',
-  ssl: process.env.POSTGRES_SSL === 'true' ? { rejectUnauthorized: false } : false
-};
-
-// Путь к SQLite базе данных
-const sqlitePath = path.join(__dirname, '..', 'database.sqlite');
-
-class DataMigrator {
-  constructor() {
-    this.pgPool = new Pool(pgConfig);
-    this.sqliteDb = null;
-  }
-
-  async initialize() {
-    try {
-      // Проверяем подключение к PostgreSQL
-      const pgClient = await this.pgPool.connect();
-      console.log('✅ Подключение к PostgreSQL установлено');
-      pgClient.release();
-
-      // Проверяем наличие SQLite базы данных
-      if (!fs.existsSync(sqlitePath)) {
-        throw new Error(`SQLite база данных не найдена: ${sqlitePath}`);
-      }
-
-      // Подключаемся к SQLite
-      this.sqliteDb = new Database(sqlitePath, { readonly: true });
-      console.log('✅ Подключение к SQLite установлено');
-
-    } catch (error) {
-      console.error('❌ Ошибка инициализации:', error.message);
-      throw error;
-    }
-  }
+console.log('This project uses SQLite. No migration to PostgreSQL is required.');
+process.exit(0);
 
   async migrateUsers() {
     console.log('\n📋 Миграция пользователей...');

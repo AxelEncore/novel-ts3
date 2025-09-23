@@ -8,8 +8,8 @@ This file provides guidance to WARP (warp.dev) when working with code in this re
 
 **Key Technologies:**
 - **Frontend**: Next.js 15 App Router, React 19, TypeScript, TailwindCSS
-- **Backend**: Next.js API Routes, PostgreSQL
-- **Database**: PostgreSQL with custom adapter pattern
+- **Backend**: Next.js API Routes, SQLite
+- **Database**: SQLite with custom adapter pattern
 - **UI**: Radix UI components with custom styling
 - **Drag & Drop**: @dnd-kit/core for Kanban functionality
 - **Authentication**: Custom JWT-based auth with httpOnly cookies
@@ -39,19 +39,14 @@ prettier --write .
 
 ### Database Commands
 ```powershell
-# Run database migrations
+# Initialize or repair SQLite schema (app will auto-init on first run)
+# Optional: run custom migration script if present
 npm run db:migrate
 
-# Rollback migrations
+# Rollback migrations (if using custom migration tooling)
 npm run db:rollback
 
-# Test PostgreSQL connection
-node test-postgresql-connection.js
-
-# Initialize database schema
-node database/migrate.js
-
-# Check database schema
+# Check database schema (custom tooling if present)
 node check-schema.js
 ```
 
@@ -73,10 +68,10 @@ node check-tables.js
 ## Architecture Overview
 
 ### Database Architecture
-The application uses a **Database Adapter Pattern** with PostgreSQL as the primary database:
+The application uses a **Database Adapter Pattern** with SQLite as the primary database:
 
 - **Database Adapter** (`src/lib/database-adapter.ts`) - Singleton wrapper providing a unified interface
-- **PostgreSQL Adapter** (`src/lib/adapters/postgresql-adapter.ts`) - PostgreSQL-specific implementation
+- **SQLite Adapter** (`src/lib/adapters/sqlite-adapter.ts`) - SQLite-specific implementation
 - **Migration System** (`database/`) - SQL migrations for schema management
 
 ### Frontend Architecture
@@ -179,13 +174,10 @@ Users <-> Tasks (assignees, reporters)
 
 ### Required Environment Variables
 ```bash
-# Database
-DATABASE_URL=postgresql://user:pass@localhost:5432/encore_tasks
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
-POSTGRES_DB=encore_tasks
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=password
+# Database (SQLite)
+DATABASE_TYPE=sqlite
+DB_PATH=./database/encore_tasks.db
+DATABASE_URL=sqlite:./database/encore_tasks.db
 
 # Auth
 JWT_SECRET=your-secret-key
@@ -196,10 +188,9 @@ TELEGRAM_BOT_TOKEN=your-telegram-bot-token
 ```
 
 ### Database Setup
-1. Install PostgreSQL locally or use Docker
-2. Copy `.env.postgresql` to `.env` 
-3. Run `npm run db:migrate` to set up schema
-4. Test connection with `node test-postgresql-connection.js`
+1. No server install required. SQLite DB file is created at first run.
+2. Ensure `.env` contains DATABASE_URL=sqlite:./database/encore_tasks.db
+3. Optionally run `npm run db:migrate` if you maintain SQL migrations.
 
 ## Common Development Patterns
 
@@ -226,4 +217,4 @@ The project includes numerous utility scripts for testing and debugging database
 
 ## Migration Notes
 
-This project has been migrated from SQLite to PostgreSQL. The PostgreSQL adapter provides the same interface as the previous SQLite implementation, ensuring compatibility while gaining PostgreSQL's advanced features and better concurrent access handling.
+This project uses SQLite as the primary database. Any previous PostgreSQL artifacts were removed or deprecated; the SQLite adapter maintains full functionality.

@@ -1,4 +1,12 @@
-# Руководство по миграции с SQLite на PostgreSQL
+# Уведомление: проект использует SQLite
+
+Этот проект стандартизирован на SQLite. Миграция на PostgreSQL не требуется и не поддерживается.
+
+- Активная схема: database/sqlite_schema.sql
+- Конфигурация среды: .env (DATABASE_URL=sqlite:./database/encore_tasks.db)
+- Адаптер БД: src/lib/adapters/sqlite-adapter.ts через src/lib/database-adapter.ts
+
+Если у вас остались старые файлы/упоминания PostgreSQL, они были удалены или помечены как устаревшие.
 
 Это руководство поможет вам мигрировать проект Encore Tasks с SQLite на PostgreSQL.
 

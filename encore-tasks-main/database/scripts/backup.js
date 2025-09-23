@@ -1,36 +1,20 @@
 #!/usr/bin/env node
 
 /**
- * Скрипт для создания резервных копий базы данных Encore Tasks
- * 
- * Использование:
- *   node scripts/backup.js [options]
- * 
- * Опции:
- *   --compress     Сжать резервную копию (по умолчанию: true)
- *   --schema-only  Создать резервную копию только схемы
- *   --data-only    Создать резервную копию только данных
- *   --output DIR   Директория для сохранения (по умолчанию: ./backups)
+ * SQLite Backup Script (replaces PostgreSQL pg_dump-based backup)
+ * Creates a timestamped copy of the SQLite database file with optional gzip compression.
  */
 
-const { spawn } = require('child_process');
-const fs = require('fs').promises;
+const fs = require('fs');
+const fsp = require('fs').promises;
 const path = require('path');
-const { createWriteStream } = require('fs');
 const { createGzip } = require('zlib');
 require('dotenv').config();
 
-// Конфигурация
-const config = {
-  host: process.env.DB_HOST || 'localhost',
-  port: process.env.DB_PORT || 5432,
-  database: process.env.DB_NAME || 'encore_tasks',
-  username: process.env.DB_USER || 'postgres',
-  password: process.env.DB_PASSWORD,
-  backupPath: process.env.BACKUP_PATH || './backups',
-  compress: process.env.BACKUP_COMPRESS !== 'false',
-  retentionDays: parseInt(process.env.BACKUP_RETENTION_DAYS) || 30
-};
+const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'encore_tasks.db');
+const BACKUP_DIR = process.env.BACKUP_PATH || path.join(process.cwd(), 'backups');
+const COMPRESS = process.env.BACKUP_COMPRESS !== 'false';
+const RETENTION_DAYS = parseInt(process.env.BACKUP_RETENTION_DAYS || '30', 10);
 
 // Парсинг аргументов командной строки
 function parseArgs() {
@@ -67,99 +51,33 @@ function parseArgs() {
   return options;
 }
 
-// Создание директории для резервных копий
-async function ensureBackupDirectory(backupPath) {
+// Ensure backup directory exists
+async function ensureBackupDirectory(dir) {
   try {
-    await fs.access(backupPath);
-  } catch (error) {
-    console.log(`📁 Создание директории: ${backupPath}`);
-    await fs.mkdir(backupPath, { recursive: true });
+    await fsp.access(dir);
+  } catch {
+    console.log(`📁 Создание директории: ${dir}`);
+    await fsp.mkdir(dir, { recursive: true });
   }
 }
 
-// Генерация имени файла резервной копии
-function generateBackupFilename(options) {
-  const timestamp = new Date().toISOString()
-    .replace(/[:.]/g, '-')
-    .replace('T', '_')
-    .slice(0, -5); // Убираем миллисекунды и Z
-  
-  let suffix = '';
-  if (options.schemaOnly) suffix = '_schema';
-  else if (options.dataOnly) suffix = '_data';
-  
-  const extension = options.compress ? '.sql.gz' : '.sql';
-  
-  return `${config.database}_${timestamp}${suffix}${extension}`;
+function timestamp() {
+  return new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_').slice(0, -5);
 }
 
-// Выполнение pg_dump
-function createBackup(outputPath, options) {
+async function copyFile(src, dest) {
+  await fsp.copyFile(src, dest);
+}
+
+async function gzipFile(src, destGz) {
   return new Promise((resolve, reject) => {
-    const args = [
-      '--host', config.host,
-      '--port', config.port.toString(),
-      '--username', config.username,
-      '--dbname', config.database,
-      '--verbose',
-      '--no-password'
-    ];
-    
-    // Добавляем опции
-    if (options.schemaOnly) {
-      args.push('--schema-only');
-    } else if (options.dataOnly) {
-      args.push('--data-only');
-    }
-    
-    // Добавляем дополнительные опции для полной резервной копии
-    if (!options.schemaOnly && !options.dataOnly) {
-      args.push('--create', '--clean', '--if-exists');
-    }
-    
-    console.log(`🔄 Выполнение pg_dump...`);
-    console.log(`   Команда: pg_dump ${args.join(' ')}`);
-    
-    const pgDump = spawn('pg_dump', args, {
-      env: {
-        ...process.env,
-        PGPASSWORD: config.password
-      }
-    });
-    
-    let outputStream;
-    
-    if (options.compress) {
-      const gzip = createGzip({ level: 9 });
-      outputStream = createWriteStream(outputPath);
-      pgDump.stdout.pipe(gzip).pipe(outputStream);
-    } else {
-      outputStream = createWriteStream(outputPath);
-      pgDump.stdout.pipe(outputStream);
-    }
-    
-    let errorOutput = '';
-    
-    pgDump.stderr.on('data', (data) => {
-      const message = data.toString();
-      if (message.includes('NOTICE') || message.includes('pg_dump:')) {
-        // Игнорируем информационные сообщения
-        return;
-      }
-      errorOutput += message;
-    });
-    
-    pgDump.on('close', (code) => {
-      if (code === 0) {
-        resolve();
-      } else {
-        reject(new Error(`pg_dump завершился с кодом ${code}\n${errorOutput}`));
-      }
-    });
-    
-    pgDump.on('error', (error) => {
-      reject(new Error(`Ошибка запуска pg_dump: ${error.message}`));
-    });
+    const rs = fs.createReadStream(src);
+    const ws = fs.createWriteStream(destGz);
+    const gz = createGzip({ level: 9 });
+    rs.pipe(gz).pipe(ws);
+    ws.on('close', resolve);
+    ws.on('error', reject);
+    rs.on('error', reject);
   });
 }
 
@@ -182,22 +100,21 @@ async function cleanupOldBackups(backupPath, retentionDays) {
   console.log(`🧹 Очистка резервных копий старше ${retentionDays} дней...`);
   
   try {
-    const files = await fs.readdir(backupPath);
+    const files = await fsp.readdir(backupPath);
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
     
     let deletedCount = 0;
     
     for (const file of files) {
-      if (!file.startsWith(config.database) || (!file.endsWith('.sql') && !file.endsWith('.sql.gz'))) {
-        continue;
-      }
+      const isBackup = file.endsWith('.db') || file.endsWith('.db.gz');
+      if (!isBackup) continue;
       
       const filePath = path.join(backupPath, file);
-      const stats = await fs.stat(filePath);
+      const stats = await fsp.stat(filePath);
       
       if (stats.mtime < cutoffDate) {
-        await fs.unlink(filePath);
+        await fsp.unlink(filePath);
         console.log(`  ✓ Удален: ${file}`);
         deletedCount++;
       }
@@ -214,50 +131,31 @@ async function cleanupOldBackups(backupPath, retentionDays) {
   }
 }
 
-// Проверка доступности pg_dump
-function checkPgDump() {
-  return new Promise((resolve, reject) => {
-    const pgDump = spawn('pg_dump', ['--version']);
-    
-    pgDump.on('close', (code) => {
-      if (code === 0) {
-        resolve();
-      } else {
-        reject(new Error('pg_dump не найден в PATH'));
-      }
-    });
-    
-    pgDump.on('error', (error) => {
-      reject(new Error(`pg_dump не доступен: ${error.message}`));
-    });
-  });
-}
+// No external tools required for SQLite backup
 
-// Основная функция создания резервной копии
-async function createDatabaseBackup(options) {
-  console.log('💾 Создание резервной копии базы данных\n');
-  
-  // Проверяем доступность pg_dump
-  await checkPgDump();
-  
-  // Создаем директорию для резервных копий
-  await ensureBackupDirectory(options.output);
-  
-  // Генерируем имя файла
-  const filename = generateBackupFilename(options);
-  const outputPath = path.join(options.output, filename);
-  
+async function createDatabaseBackup() {
+  console.log('💾 Создание резервной копии SQLite базы данных\n');
+
+  await ensureBackupDirectory(BACKUP_DIR);
+
+  if (!fs.existsSync(DB_PATH)) {
+    throw new Error(`Не найден файл базы данных: ${DB_PATH}`);
+  }
+
+  const baseName = `encore_tasks_${timestamp()}.db`;
+  const destPath = path.join(BACKUP_DIR, baseName);
+
   console.log('📊 Параметры резервного копирования:');
-  console.log(`   База данных: ${config.database}`);
-  console.log(`   Хост: ${config.host}:${config.port}`);
-  console.log(`   Файл: ${filename}`);
-  console.log(`   Сжатие: ${options.compress ? 'включено' : 'отключено'}`);
-  
-  if (options.schemaOnly) {
-    console.log(`   Режим: только схема`);
-  } else if (options.dataOnly) {
-    console.log(`   Режим: только данные`);
-  } else {
+  console.log(`   Файл БД: ${DB_PATH}`);
+  console.log(`   Файл копии: ${destPath}${COMPRESS ? ' (gz)' : ''}`);
+
+  await copyFile(DB_PATH, destPath);
+  if (COMPRESS) {
+    await gzipFile(destPath, `${destPath}.gz`);
+    await fsp.unlink(destPath);
+  }
+
+  console.log('✅ Резервная копия создана успешно');
     console.log(`   Режим: полная резервная копия`);
   }
   
@@ -279,7 +177,7 @@ async function createDatabaseBackup(options) {
     console.log(`   Время: ${duration} секунд`);
     
     // Очищаем старые резервные копии
-    await cleanupOldBackups(options.output, config.retentionDays);
+    await cleanupOldBackups(BACKUP_DIR, RETENTION_DAYS);
     
   } catch (error) {
     console.error('❌ Ошибка при создании резервной копии:', error.message);
@@ -297,15 +195,7 @@ async function createDatabaseBackup(options) {
 
 // Проверка переменных окружения
 function validateEnvironment() {
-  const required = ['DB_PASSWORD'];
-  const missing = required.filter(key => !process.env[key]);
-  
-  if (missing.length > 0) {
-    console.error('❌ Отсутствуют обязательные переменные окружения:');
-    missing.forEach(key => console.error(`   - ${key}`));
-    console.error('\n💡 Создайте файл .env на основе .env.example');
-    process.exit(1);
-  }
+  // No required env vars for SQLite backup
 }
 
 // Основная функция
@@ -316,20 +206,14 @@ async function main() {
   
   const options = parseArgs();
   
-  try {
-    await createDatabaseBackup(options);
+try {
+    await createDatabaseBackup();
     
     console.log('\n🎉 Резервное копирование завершено успешно!');
     
   } catch (error) {
     console.error('❌ Ошибка:', error.message);
     
-    if (error.message.includes('pg_dump не найден')) {
-      console.error('\n💡 Установите PostgreSQL client tools');
-      console.error('   Windows: https://www.postgresql.org/download/windows/');
-      console.error('   macOS: brew install postgresql');
-      console.error('   Ubuntu: sudo apt-get install postgresql-client');
-    }
     
     process.exit(1);
   }

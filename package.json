@@ -1,6 +1,5 @@
 {
   "dependencies": {
-    "@dnd-kit/modifiers": "^9.0.0",
-    "pg": "^8.16.3"
+    "@dnd-kit/modifiers": "^9.0.0"
   }
 }

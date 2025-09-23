@@ -4,7 +4,7 @@ This file provides guidance to WARP (warp.dev) when working with code in this re
 
 Repository layout
 - Primary app: encore-tasks-main (Next.js 15, React 19, TypeScript, Tailwind)
-- Database tooling: encore-tasks-main/database (PostgreSQL migrations and scripts)
+- Database tooling: encore-tasks-main/database (SQLite schema and scripts)
 - Backend (experimental/scaffold): encore-tasks-main/backend (Express/Prisma deps present; not wired to main app scripts)
 - Root package.json is minimal and does not contain development scripts
 
@@ -39,7 +39,7 @@ Common commands (Windows PowerShell)
   npm run format --prefix .\encore-tasks-main
   ```
 
-- Database operations (PostgreSQL)
+- Database operations (SQLite)
   ```powershell path=null start=null
   # Run app-level migration wrapper (invokes database/migrate.js)
   npm run db:migrate --prefix .\encore-tasks-main
@@ -84,29 +84,26 @@ Architecture overview
 
 - Data access and services
   - Database access is abstracted through an adapter pattern
-    - src/lib/database-adapter.ts and src/lib/adapters/postgresql-adapter.ts provide a PostgreSQL implementation
+    - src/lib/database-adapter.ts and src/lib/adapters/sqlite-adapter.ts provide a SQLite implementation
   - Higher-level business logic via services located in src/services and a refactored domain-oriented split in src/refactored
     - refactored/data: repositories and adapter facades
     - refactored/business: services, validators, and interfaces
     - refactored/presentation: components, context, hooks, and utils
 
 - Database and migrations
-  - PostgreSQL schema and migrations: encore-tasks-main/database/migrations
-  - Operational scripts: encore-tasks-main/database/scripts (create/drop/setup/reset/backup/restore/cleanup)
-  - Requires a valid DATABASE_URL or discrete POSTGRES_* env vars; see database README for Windows setup details
+  - SQLite schema: encore-tasks-main/database/sqlite_schema.sql
+  - Operational scripts: encore-tasks-main/database/scripts (seed/backup/cleanup as needed)
+  - No server required; the SQLite DB file is created automatically on first run
 
 Environment
 - Minimum required variables (examples; set these in a local .env and do not commit secrets):
   ```bash path=null start=null
-  # PostgreSQL
-  POSTGRES_HOST=localhost
-  POSTGRES_PORT=5432
-  POSTGRES_DB=encore_tasks
-  POSTGRES_USER=postgres
-  POSTGRES_PASSWORD=...
-  DATABASE_URL=postgresql://postgres:...@localhost:5432/encore_tasks
+  # SQLite
+  DATABASE_TYPE=sqlite
+  DB_PATH=./encore-tasks-main/database/encore_tasks.db
+  DATABASE_URL=sqlite:./encore-tasks-main/database/encore_tasks.db
   ```
-- See encore-tasks-main/database/README.md for Windows-specific PostgreSQL installation and initialization, and encore-tasks-main/WARP.md for the broader env list used by the app (JWT/SESSION, optional Telegram).
+- See encore-tasks-main/database/README.md for SQLite initialization details and encore-tasks-main/WARP.md for the broader env list used by the app (JWT/SESSION, optional Telegram).
 
 Project rules
 - Task board statuses must follow these constraints:
