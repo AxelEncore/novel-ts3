@@ -106,7 +106,7 @@ type AppAction =
   | { type: "ADD_TASK"; payload: Task }
   | { type: "UPDATE_TASK"; payload: Task }
   | { type: "DELETE_TASK"; payload: string }
-  | { type: "ARCHIVE_TASK"; payload: string }
+  | { type: "ARCHIVE_TASK"; payload: string | { taskId?: string; task?: Task; archivedAt?: Date; archivedBy?: string } }
   | { type: "UNARCHIVE_TASK"; payload: string }
   | { type: "SET_ARCHIVED_TASKS"; payload: Task[] }
   | {
@@ -128,6 +128,8 @@ type AppAction =
   | { type: "MARK_ALL_NOTIFICATIONS_READ" }
   | { type: "UPDATE_SETTINGS"; payload: Partial<AppState["settings"]> }
   | { type: "ADD_TASK_ACTION"; payload: TaskAction };
+
+const ARCHIVE_STORAGE_KEY = 'encore-archived-tasks';
 
 const initialState: AppState = {
   currentUser: null,
@@ -377,28 +379,48 @@ function appReducer(state: AppState, action: AppAction): AppState {
       };
 
     case "ARCHIVE_TASK": {
-      const task = state.tasks.find(t => t.id === (action as any).payload?.taskId || (action as any).payload);
+      // Supports payload as: string (taskId), { taskId, archivedAt, archivedBy }, or { task }
+      const payload: any = (action as any).payload;
+      const taskId: string | undefined = typeof payload === 'string' ? payload : payload?.taskId;
+      const taskFromState = taskId ? state.tasks.find(t => t.id === taskId) : undefined;
+      const task: any = taskFromState || payload?.task;
       if (!task) return state;
-      const archivedAt = (action as any).payload?.archivedAt || new Date();
-      const archivedBy = (action as any).payload?.archivedBy || state.currentUser?.id || '';
-      const archivedTask = { ...task, isArchived: true, archivedAt, archivedBy } as any;
+      const archivedAt = payload?.archivedAt || new Date();
+      const archivedBy = payload?.archivedBy || state.currentUser?.id || '';
+      const boardIdNorm = (task as any).board_id || (task as any).boardId || (state.selectedBoard?.id ?? '');
+      const updatedAtNorm = (task as any).updated_at || (task as any).updatedAt || new Date().toISOString();
+      const archivedTask = { 
+        ...task, 
+        isArchived: true, 
+        archivedAt, 
+        archivedBy,
+        board_id: boardIdNorm,
+        boardId: boardIdNorm,
+        updated_at: updatedAtNorm
+      } as any;
+      const existing = (state.archivedTasks || []).some(t => String(t.id) === String(archivedTask.id));
+      const nextArchived = existing
+        ? (state.archivedTasks || []).map(t => String(t.id) === String(archivedTask.id) ? { ...t, ...archivedTask } : t)
+        : [ ...(state.archivedTasks || []), archivedTask ];
       return {
         ...state,
-        tasks: state.tasks.filter(t => t.id !== task.id),
-        archivedTasks: [...(state.archivedTasks || []), archivedTask]
+        tasks: state.tasks.filter(t => t.id !== archivedTask.id),
+        archivedTasks: nextArchived
       };
     }
 
     case "UNARCHIVE_TASK": {
       const taskId = (action as any).payload;
-      const archived = (state.archivedTasks || []).find(t => t.id === taskId);
+      const archived = (state.archivedTasks || []).find(t => String(t.id) === String(taskId));
       if (!archived) return state;
-      const restoredTask = { ...archived, isArchived: false, status: 'review', updatedAt: new Date() } as any;
-      const remainingArchived = (state.archivedTasks || []).filter(t => t.id !== taskId);
+      const restoredTask = { ...archived, isArchived: false, status: 'in_progress', updated_at: new Date().toISOString() } as any;
+      const remainingArchived = (state.archivedTasks || []).filter(t => String(t.id) !== String(taskId));
+      // Remove any duplicates of the same task id from archive
+      const dedupedRemaining = remainingArchived.filter((t, idx, arr) => arr.findIndex(x => String(x.id) === String(t.id)) === idx);
       return {
         ...state,
-        archivedTasks: remainingArchived,
-        tasks: [...state.tasks, restoredTask]
+        archivedTasks: dedupedRemaining,
+        tasks: [...state.tasks.filter(t => String(t.id) !== String(restoredTask.id)), restoredTask]
       };
     }
 
@@ -487,10 +509,32 @@ const AppContext = createContext<{
 } | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
+  const loadArchived = (): any[] => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const raw = localStorage.getItem(ARCHIVE_STORAGE_KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      // de-duplicate by id on load
+      const map = new Map<string, any>();
+      for (const t of Array.isArray(arr) ? arr : []) {
+        const id = String((t && t.id) || '');
+        if (!id) continue;
+        map.set(id, t);
+      }
+      return Array.from(map.values());
+    } catch { return []; }
+  };
   const [state, dispatch] = useReducer(appReducer, {
     ...initialState,
-    settings: loadSettings()
+    settings: loadSettings(),
+    archivedTasks: loadArchived(),
   });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try { localStorage.setItem(ARCHIVE_STORAGE_KEY, JSON.stringify(state.archivedTasks || [])); } catch {}
+    }
+  }, [state.archivedTasks]);
 
   // Initialize authentication on app load
   useEffect(() => {

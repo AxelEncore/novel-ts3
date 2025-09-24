@@ -16,6 +16,8 @@ const updateTaskSchema = z.object({
   columnId: z.string().uuid().optional(),
   position: z.number().min(0).optional(),
   assigneeId: z.string().uuid().optional(),
+  isArchived: z.boolean().optional(),
+  archivedAt: z.string().datetime().optional(),
 });
 
 // GET /api/tasks/[id] - Получение задачи по ID

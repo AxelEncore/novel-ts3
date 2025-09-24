@@ -193,8 +193,25 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
           })
         );
         
-        setColumns(columnsWithTasks);
-        console.log('✅ KanbanBoard: Loaded', columnsWithTasks.length, 'columns with tasks');
+        // Применяем ограничение для колонки Выполнено сразу после загрузки
+        const afterEnforce = columnsWithTasks.map((col: any) => ({ ...col, tasks: Array.isArray(col.tasks) ? [...col.tasks] : [] }));
+        const toArchive: any[] = [];
+        for (const col of afterEnforce) {
+          if (isDoneColumn(col) && Array.isArray(col.tasks) && col.tasks.length > 7) {
+            const { nextTasks, archived } = enforceDoneLimit(col.tasks);
+            col.tasks = nextTasks;
+            if (archived.length) toArchive.push(...archived);
+          }
+        }
+        setColumns(afterEnforce);
+        if (toArchive.length) {
+          console.log('Auto-archiving on load:', toArchive.length);
+          for (const t of toArchive) {
+            const bid = (t as any).board_id || (t as any).boardId || board.id;
+            dispatch({ type: 'ARCHIVE_TASK', payload: { task: { ...t, board_id: bid, boardId: bid }, archivedAt: new Date(), archivedBy: state.currentUser?.id } as any } as any);
+          }
+        }
+        console.log('✅ KanbanBoard: Loaded', afterEnforce.length, 'columns with tasks');
       } else {
         console.error('❌ KanbanBoard: Failed to load columns:', data.error);
         toast.error(data.error || 'Ошибка при загрузке колонок');
@@ -212,25 +229,62 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
     loadProjectMembers();
   }, [board.id]);
 
+  // Обновляем колонки при событиях обновления задач (после восстановления из архива и т.п.)
+  useEffect(() => {
+    const handler = () => loadColumns();
+    if (typeof window !== 'undefined') {
+      window.addEventListener('tasks-updated', handler);
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('tasks-updated', handler);
+      }
+    };
+  }, [board.id]);
+
   // Обработка создания новой задачи
   const handleTaskCreated = async (newTask: Task, columnId: string) => {
     // Обновляем статус задачи на основе колонки
     const column = columns.find(col => col.id === columnId);
     const correctStatus = column ? statusMapping[column.id] : newTask.status;
-    const taskWithCorrectStatus = {
+    const taskWithCorrectStatus: any = {
       ...newTask,
       status: correctStatus
     };
-    
-    setColumns(prev => prev.map(col => {
-      if (col.id === columnId) {
-        return {
-          ...col,
-          tasks: [...(col.tasks || []), taskWithCorrectStatus]
-        };
+
+    let toArchive: any[] = [];
+    setColumns(prev => {
+      const next = prev.map(col => ({ ...col }));
+      const idx = next.findIndex(c => String(c.id) === String(columnId));
+      if (idx !== -1) {
+        const before = [...(next[idx].tasks || []), taskWithCorrectStatus];
+        if (correctStatus === 'done') {
+          const { nextTasks, archived } = enforceDoneLimit(before);
+          next[idx] = { ...next[idx], tasks: nextTasks };
+          toArchive = archived;
+        } else {
+          next[idx] = { ...next[idx], tasks: before };
+        }
       }
-      return col;
-    }));
+      return next;
+    });
+
+    if (Array.isArray(toArchive) && toArchive.length > 0) {
+      for (const t of toArchive) {
+        const bid = (t as any).board_id || (t as any).boardId || board.id;
+        const archivedAt = new Date();
+        dispatch({ type: 'ARCHIVE_TASK', payload: { task: { ...t, board_id: bid, boardId: bid }, archivedAt, archivedBy: state.currentUser?.id } as any } as any);
+        // Persist on server
+        try {
+          await fetch(`/api/tasks/${t.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ isArchived: true, archivedAt: archivedAt.toISOString() })
+          });
+        } catch {}
+      }
+    }
     
     // Перезагружаем колонки чтобы получить актуальные данные из БД
     setTimeout(() => {
@@ -289,6 +343,34 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
     return found ? String(found.id) : null;
   };
 
+  // Вспомогательная функция: проверяет, является ли колонка "Выполнено"
+  const isDoneColumn = (col: Column): boolean => {
+    const mapped = statusMapping[col.id];
+    if (mapped === 'done') return true;
+    const name = String(col.name || col.title || '').toLowerCase().trim();
+    return /(?:^|\s)(выполнено|готово|завершено|done)(?:$|\s)/.test(name);
+  };
+
+  // Унифицированное принудительное ограничение количества задач в Done до 7
+  const enforceDoneLimit = (tasks: any[]): { nextTasks: any[]; archived: any[] } => {
+    try {
+      const list = Array.isArray(tasks) ? [...tasks] : [];
+      if (list.length <= 7) return { nextTasks: list, archived: [] };
+      const sortedAsc = [...list].sort((a: any, b: any) => {
+        const at = new Date(a.updated_at || a.updatedAt || a.created_at || a.createdAt || Date.now()).getTime();
+        const bt = new Date(b.updated_at || b.updatedAt || b.created_at || b.createdAt || Date.now()).getTime();
+        return at - bt;
+      });
+      const needArchive = sortedAsc.length - 7;
+      const archived = sortedAsc.slice(0, needArchive);
+      const archivedIds = new Set(archived.map((t: any) => String(t.id)));
+      const nextTasks = list.filter(t => !archivedIds.has(String(t.id)));
+      return { nextTasks, archived };
+    } catch {
+      return { nextTasks: Array.isArray(tasks) ? tasks : [], archived: [] };
+    }
+  };
+
   // Обработка клика по галочке (toggle)
   const handleTaskComplete = async (task: Task) => {
     try {
@@ -315,34 +397,50 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
 
       const updatedTask = await response.json();
 
-      // Перемещаем задачу локально между колонками при необходимости
-      setColumns(prev => {
-        const next = prev.map(col => ({ ...col }));
-        const fromIdx = sourceColumn ? next.findIndex(c => c.id === sourceColumn.id) : -1;
+      // Синхронно рассчитываем новое состояние колонок и задачу для архивации
+      let toArchive: any = null;
+      const nextColumns = (() => {
+        const next = columns.map(col => ({ ...col, tasks: Array.isArray(col.tasks) ? [...col.tasks] : [] } as any));
+        const fromIdx = sourceColumn ? next.findIndex(c => String(c.id) === String(sourceColumn!.id)) : -1;
         const toIdx = next.findIndex(c => String(c.id) === String(targetColumnId));
 
-        // убрать из источника
         if (fromIdx !== -1) {
-          next[fromIdx] = {
-            ...next[fromIdx],
-            tasks: (next[fromIdx].tasks || []).filter((t: any) => t.id !== task.id)
-          };
+          next[fromIdx].tasks = (next[fromIdx].tasks || []).filter((t: any) => t.id !== task.id);
         }
 
-        // добавить в цель (или обновить в исходной, если цель не найдена)
         if (toIdx !== -1) {
-          next[toIdx] = {
-            ...next[toIdx],
-            tasks: [...(next[toIdx].tasks || []), { ...task, ...updatedTask }]
-          };
-        } else if (fromIdx !== -1) {
-          next[fromIdx] = {
-            ...next[fromIdx],
-            tasks: (next[fromIdx].tasks || []).map((t: any) => t.id === task.id ? { ...t, ...updatedTask } : t)
-          };
+          const inserted = { ...task, ...updatedTask } as any;
+          const before = [...(next[toIdx].tasks || []), inserted];
+          if (isDoneColumn(next[toIdx])) {
+            const { nextTasks, archived } = enforceDoneLimit(before);
+            console.log('[toggle] Done before:', before.length, 'after:', nextTasks.length, 'archived:', archived.length);
+            next[toIdx].tasks = nextTasks;
+            if (archived.length > 0) toArchive = archived; // список
+          } else {
+            next[toIdx].tasks = before;
+          }
         }
         return next;
-      });
+      })();
+
+      setColumns(nextColumns as any);
+
+      if (Array.isArray(toArchive) && toArchive.length > 0) {
+        for (const t of toArchive) {
+          const bid = (t as any).board_id || (t as any).boardId || board.id;
+          const archivedAt = new Date();
+          dispatch({ type: 'ARCHIVE_TASK', payload: { task: { ...t, board_id: bid, boardId: bid }, archivedAt, archivedBy: state.currentUser?.id } as any } as any);
+          // Persist on server
+          try {
+            await fetch(`/api/tasks/${t.id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({ isArchived: true, archivedAt: archivedAt.toISOString() })
+            });
+          } catch {}
+        }
+      }
 
       if (onTaskUpdate) onTaskUpdate();
     } catch (error) {
@@ -416,27 +514,6 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
           
           const updatedTask = await response.json();
 
-          // Если перенесли в Done, фиксируем как завершённую (обновлённая метка времени)
-          if (newStatus === 'done') {
-            // Простейшее ограничение: максимум 7 задач в Done, лишние — в архив
-            try {
-              const doneTasks = state.tasks
-                .filter(t => t.boardId === state.selectedBoard?.id && t.status === 'done' && !(t as any).isArchived)
-                .concat([{ ...draggedTask, status: 'done', updatedAt: new Date() } as any]);
-              if (doneTasks.length > 7) {
-                const oldest = [...doneTasks].sort((a, b) => {
-                  const at = new Date((a as any).updatedAt || (a as any).createdAt || Date.now()).getTime();
-                  const bt = new Date((b as any).updatedAt || (b as any).createdAt || Date.now()).getTime();
-                  return at - bt;
-                })[0];
-                if (oldest && oldest.id !== draggedTask.id) {
-                  dispatch({ type: 'ARCHIVE_TASK', payload: { taskId: oldest.id, archivedAt: new Date(), archivedBy: state.currentUser?.id } });
-                }
-              }
-            } catch (e) {
-              console.warn('Archive enforcement failed:', e);
-            }
-          }
           
           // Обновляем локальное состояние
           const taskWithUpdatedStatus = {
@@ -444,22 +521,46 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
             column_id: targetColumnId,
             status: newStatus
           };
-          
-          setColumns(prev => prev.map(col => {
-            if (col.id === sourceColumn.id) {
-              return {
-                ...col,
-                tasks: (col.tasks || []).filter(task => task.id !== draggedTask.id)
-              };
+          // Синхронно рассчитываем новое состояние и задачу для архивации
+          let toArchive: any = null;
+          const nextColumns = (() => {
+            const next = columns.map(c => ({ ...c, tasks: Array.isArray(c.tasks) ? [...c.tasks] : [] } as any));
+            const srcIdx = next.findIndex(c => String(c.id) === String(sourceColumn.id));
+            const tgtIdx = next.findIndex(c => String(c.id) === String(targetColumnId));
+            if (srcIdx !== -1) {
+              next[srcIdx].tasks = (next[srcIdx].tasks || []).filter((t: any) => t.id !== draggedTask.id);
             }
-            if (col.id === targetColumnId) {
-              return {
-                ...col,
-                tasks: [...(col.tasks || []), taskWithUpdatedStatus]
-              };
+            if (tgtIdx !== -1) {
+              const before = [...(next[tgtIdx].tasks || []), taskWithUpdatedStatus as any];
+              if (isDoneColumn(next[tgtIdx])) {
+                const { nextTasks, archived } = enforceDoneLimit(before);
+                console.log('[dnd] Done before:', before.length, 'after:', nextTasks.length, 'archived:', archived.length);
+                next[tgtIdx].tasks = nextTasks;
+                if (archived.length > 0) toArchive = archived; // список
+              } else {
+                next[tgtIdx].tasks = before;
+              }
             }
-            return col;
-          }));
+            return next;
+          })();
+
+          setColumns(nextColumns as any);
+          if (Array.isArray(toArchive) && toArchive.length > 0) {
+            for (const t of toArchive) {
+              const bid = (t as any).board_id || (t as any).boardId || board.id;
+              const archivedAt = new Date();
+              dispatch({ type: 'ARCHIVE_TASK', payload: { task: { ...t, board_id: bid, boardId: bid }, archivedAt, archivedBy: state.currentUser?.id } as any } as any);
+              // Persist on server
+              try {
+                await fetch(`/api/tasks/${t.id}`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  credentials: 'include',
+                  body: JSON.stringify({ isArchived: true, archivedAt: archivedAt.toISOString() })
+                });
+              } catch {}
+            }
+          }
           
           if (onTaskUpdate) {
             onTaskUpdate();
@@ -551,9 +652,10 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
               onTaskComplete={(task) => handleTaskComplete(task)}
               onTaskOpen={(task) => { setEditingTask(task); setShowTaskModal(true); }}
               archivedCount={(() => {
-                const mappedStatus = statusMapping[column.id];
-                if (mappedStatus !== 'done') return 0;
-                return (state.archivedTasks || []).filter((t: any) => String(t.board_id || t.boardId) === String(board.id)).length;
+                if (!isDoneColumn(column)) return 0;
+                const count = (state.archivedTasks || []).filter((t: any) => String(t.board_id || t.boardId) === String(board.id)).length;
+                if (count > 0) console.log('[archive-count]', column.id, column.title || column.name, '=>', count);
+                return count;
               })()}
               onOpenArchive={() => setIsArchivedTasksModalOpen(true)}
               onDragStart={(e, type, item) => handleDragStart(e, type, item)}

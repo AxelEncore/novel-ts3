@@ -24,8 +24,43 @@ function ArchivedTasksModal({ isOpen, onClose, boardId }: ArchivedTasksModalProp
   const [sortBy, setSortBy] = useState<"completedAt" | "archivedAt" | "title">("archivedAt");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
-  const handleRestoreTask = (taskId: string) => {
+  const handleRestoreTask = async (taskId: string) => {
+    // Сначала локально
     dispatch({ type: "UNARCHIVE_TASK", payload: taskId });
+    // Затем синхронизируем с сервером (переводим в статус in_progress и стараемся указать колонку "В работе")
+    try {
+      // 1) Получаем колонки доски
+      const colsRes = await fetch(`/api/columns?boardId=${boardId}`, { credentials: 'include' });
+      let inProgressColumnId: string | null = null;
+      if (colsRes.ok) {
+        const colsData = await colsRes.json();
+        const columns = colsData.columns || colsData.data || [];
+        // Определяем статус колонки по title/name
+        for (const col of columns) {
+          const status = col.status || '';
+          const name = String(col.name || col.title || '').toLowerCase();
+          if (status === 'in_progress' || name.includes('в работе') || name.includes('progress') || name.includes('процесс')) {
+            inProgressColumnId = String(col.id);
+            break;
+          }
+        }
+      }
+      // 2) Отправляем обновление задачи
+      const patchBody: any = { status: 'in_progress', isArchived: false, archivedAt: null };
+      if (inProgressColumnId) patchBody.columnId = inProgressColumnId;
+      await fetch(`/api/tasks/${taskId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(patchBody)
+      });
+      // Сообщаем доске, что задачи обновились
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('tasks-updated'));
+      }
+    } catch (e) {
+      console.warn('Не удалось синхронизировать восстановление задачи с сервером:', e);
+    }
   };
 
   const handleDeleteTask = async (taskId: string) => {

@@ -107,6 +107,8 @@ const KanbanColumnDark: React.FC<KanbanColumnProps> = ({
   onDrop,
   onDragEnd,
   isDragOver,
+  archivedCount = 0,
+  onOpenArchive,
 }) => {
   console.log('📋 KanbanColumnDark: Column data:', column);
   const styles = getColumnStyles(column.name || column.title);

@@ -688,6 +688,8 @@ export class SQLiteAdapter {
     };
 
     for (const [key, value] of Object.entries(updates)) {
+      // Ignore archive-related fields not present in SQLite schema
+      if (key === 'isArchived' || key === 'archivedAt') continue;
       if (key === 'id') continue;
 
       const dbKey = fieldMapping[key] || toSnake(key); // generic fallback
