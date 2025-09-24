@@ -13,7 +13,8 @@ const updateTaskSchema = z.object({
   status: z.enum(['todo', 'in_progress', 'review', 'done', 'deferred']).optional(),
   priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
   dueDate: z.string().datetime().optional(),
-  columnId: z.string().uuid().optional(),
+  // Accept both UUID and 32-char hex ids (SQLite)
+  columnId: z.string().min(1).optional(),
   position: z.number().min(0).optional(),
   assigneeId: z.string().uuid().optional(),
   isArchived: z.boolean().optional(),
