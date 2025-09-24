@@ -491,21 +491,6 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
 
   return (
     <div className="h-full p-4">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-white">{board.name}</h1>
-          {board.description && (
-            <p className="text-gray-400 mt-1">{board.description}</p>
-          )}
-        </div>
-        
-        {/* Колонки создаются автоматически при создании доски */}
-        <div className="text-gray-400 text-sm">
-          Колонки созданы автоматически
-        </div>
-      </div>
-
       {/* Columns */}
       <div className="flex items-start space-x-4 overflow-x-auto pb-4">
         {columns
