@@ -138,7 +138,7 @@ export function TopBar({
       case "home":
         return "Главная";
       case "boards":
-        return currentProject ? `${currentProject.name} - Доски` : "Доски";
+        return currentProject ? `${currentProject.name}` : "Доски";
       case "projects":
         return "Проекты";
       case "calendar":
