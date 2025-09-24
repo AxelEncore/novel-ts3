@@ -376,6 +376,32 @@ function appReducer(state: AppState, action: AppAction): AppState {
         tasks: state.tasks.filter(task => task.id !== action.payload)
       };
 
+    case "ARCHIVE_TASK": {
+      const task = state.tasks.find(t => t.id === (action as any).payload?.taskId || (action as any).payload);
+      if (!task) return state;
+      const archivedAt = (action as any).payload?.archivedAt || new Date();
+      const archivedBy = (action as any).payload?.archivedBy || state.currentUser?.id || '';
+      const archivedTask = { ...task, isArchived: true, archivedAt, archivedBy } as any;
+      return {
+        ...state,
+        tasks: state.tasks.filter(t => t.id !== task.id),
+        archivedTasks: [...(state.archivedTasks || []), archivedTask]
+      };
+    }
+
+    case "UNARCHIVE_TASK": {
+      const taskId = (action as any).payload;
+      const archived = (state.archivedTasks || []).find(t => t.id === taskId);
+      if (!archived) return state;
+      const restoredTask = { ...archived, isArchived: false, status: 'review', updatedAt: new Date() } as any;
+      const remainingArchived = (state.archivedTasks || []).filter(t => t.id !== taskId);
+      return {
+        ...state,
+        archivedTasks: remainingArchived,
+        tasks: [...state.tasks, restoredTask]
+      };
+    }
+
     case "SET_FILTERS":
       return {
         ...state,

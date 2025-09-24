@@ -42,7 +42,7 @@ function ArchivedTasksModal({ isOpen, onClose, boardId }: ArchivedTasksModalProp
     }
   };
 
-  const isAdmin = state.currentUser$1.role === "admin";
+  const isAdmin = state.currentUser?.role === "admin";
 
   const filteredAndSortedTasks = useMemo(() => {
     if (!state.archivedTasks || !Array.isArray(state.archivedTasks)) {
@@ -53,7 +53,7 @@ function ArchivedTasksModal({ isOpen, onClose, boardId }: ArchivedTasksModalProp
       if (task.board_id !== boardId) return false;
       
       const matchesSearch = task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            task.description$1.toLowerCase().includes(searchTerm.toLowerCase());
+                            (task.description || '').toLowerCase().includes(searchTerm.toLowerCase());
       
       const matchesAssignee = !selectedAssignee || 
                              task.assignee_id === selectedAssignee;
@@ -276,7 +276,7 @@ function ArchivedTasksModal({ isOpen, onClose, boardId }: ArchivedTasksModalProp
                         {task.assignee_id && (
                           <div className="flex items-center gap-1">
                             <User className="w-3 h-3" />
-                            <span>{state.users.find(u => u.id === task.assignee_id)$1.name || 'Не назначено'}</span>
+                            <span>{state.users.find(u => u.id === task.assignee_id)?.name || 'Не назначено'}</span>
                           </div>
                         )}
                         

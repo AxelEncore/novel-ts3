@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Calendar } from 'lucide-react';
+import { Plus, Calendar, AlertTriangle, Zap, Clock, CheckCircle } from 'lucide-react';
 
 interface Column {
   id: string | number;
@@ -23,6 +23,8 @@ interface KanbanColumnProps {
   onDrop: (e: React.DragEvent) => void;
   onDragEnd: () => void;
   isDragOver: boolean;
+  archivedCount?: number;
+  onOpenArchive?: () => void;
 }
 
 // Цветовые схемы для колонок в темной теме со стекломорфизмом
@@ -135,7 +137,7 @@ const KanbanColumnDark: React.FC<KanbanColumnProps> = ({
 
   return (
     <div
-      className={`flex-shrink-0 w-80 h-full backdrop-blur-sm border rounded-xl transition-all duration-200 ${
+      className={`flex-shrink-0 w-80 min-h-[200px] backdrop-blur-sm border rounded-xl transition-all duration-200 ${
         isDragOver 
           ? 'bg-white/20 border-white/40 shadow-lg' 
           : `${styles.background} ${styles.background.includes('border-') ? '' : 'border-white/10'}`
@@ -159,19 +161,19 @@ const KanbanColumnDark: React.FC<KanbanColumnProps> = ({
       </div>
 
       {/* Tasks Container */}
-      <div className="flex-1 p-4 overflow-y-auto">
-        <div className="space-y-3 min-h-[200px]">
+      <div className="p-3 md:p-4 overflow-visible">
+        <div className="space-y-2 min-h-[200px]">
           {tasks && tasks.length > 0 ? (
             tasks.map((task) => (
               <div
                 key={task.id}
-                className="p-3 bg-white/5 backdrop-blur-sm border border-white/10 rounded-lg hover:bg-white/10 transition-all duration-200 cursor-pointer task-card fade-item animate-fade-in"
+className="p-3 bg-white/5 backdrop-blur-sm border border-white/10 rounded-lg hover:bg-white/10 transition-all duration-200 cursor-pointer task-card fade-item animate-fade-in"
                 draggable
                 onDragStart={(e) => onDragStart(e, 'task', task)}
                 onDragEnd={onDragEnd}
                 onClick={() => onTaskOpen && onTaskOpen(task)}
               >
-                <div className="flex items-start justify-between mb-2">
+                <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     {/* Toggle complete circle */}
                     <button
@@ -203,6 +205,27 @@ className={`flex items-center justify-center w-5 h-5 rounded-full transition-tra
                     <h4 className="text-white font-medium text-sm leading-tight">
                       {task.title || task.name || 'Без названия'}
                     </h4>
+                  </div>
+
+                  {/* Priority icon on the right */}
+                  <div className="ml-2 flex-shrink-0" title={
+                    task.priority === 'urgent' ? 'Срочная задача' :
+                    task.priority === 'high' ? 'Высокий приоритет' :
+                    task.priority === 'medium' ? 'Средний приоритет' :
+                    task.priority === 'low' ? 'Низкий приоритет' : ''
+                  }>
+                    {task.priority === 'urgent' && (
+                      <Zap className="w-4 h-4 text-red-400" />
+                    )}
+                    {task.priority === 'high' && (
+                      <AlertTriangle className="w-4 h-4 text-orange-400" />
+                    )}
+                    {task.priority === 'medium' && (
+                      <Clock className="w-4 h-4 text-yellow-400" />
+                    )}
+                    {task.priority === 'low' && (
+                      <CheckCircle className="w-4 h-4 text-green-400" />
+                    )}
                   </div>
                 </div>
                 
@@ -237,18 +260,8 @@ className={`flex items-center justify-center w-5 h-5 rounded-full transition-tra
                       );
                     })()}
 
-                    {/* Приоритет */}
-                    {task.priority && (
-                      <span className={`text-xs px-2 py-1 rounded-full ${
-                        task.priority === 'high' 
-                          ? 'bg-red-500/20 text-red-300' 
-                          : task.priority === 'medium'
-                          ? 'bg-yellow-500/20 text-yellow-300'
-                          : 'bg-gray-500/20 text-gray-300'
-                      }`}>
-                        {task.priority}
-                      </span>
-                    )}
+                    {/* Приоритет — отображается иконкой справа от названия */}
+                    {/* текстовая метка скрыта */}
                   </div>
                   
                 </div>
@@ -322,6 +335,18 @@ className={`flex items-center justify-center w-5 h-5 rounded-full transition-tra
           <Plus className="w-4 h-4" />
           <span className="text-sm">Добавить задачу</span>
         </button>
+
+        {/* Archive block for Done column */}
+        {(typeof archivedCount === 'number' && archivedCount > 0) && (
+          <button
+            onClick={onOpenArchive}
+            className="w-full mt-3 p-3 bg-white/5 border border-white/10 rounded-lg text-white/80 hover:bg-white/10 transition-colors flex items-center justify-between"
+            title="Архив задач"
+          >
+            <span>Архив задач</span>
+            <span className="text-xs bg-white/10 px-2 py-0.5 rounded-full">{archivedCount}</span>
+          </button>
+        )}
       </div>
     </div>
   );

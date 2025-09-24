@@ -4,6 +4,7 @@ import { Board, Column, Task, User } from '@/types';
 import { useApp } from '@/contexts/AppContext';
 import { toast } from 'sonner';
 import KanbanColumnDark from './KanbanColumnDark';
+import ArchivedTasksModal from './ArchivedTasksModal';
 import CreateTaskModal from './CreateTaskModal';
 import { TaskModal } from './TaskModal';
 
@@ -25,7 +26,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
   onTaskUpdate,
   onColumnUpdate,
 }) => {
-  const { user, users } = useApp();
+  const { state, dispatch } = useApp();
   const [projectMembers, setProjectMembers] = useState<User[]>([]);
   
   // Функция для соответствия колонок со статусами задач
@@ -78,6 +79,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
   const [selectedColumn, setSelectedColumn] = useState<Column | null>(null);
   const [editingTask, setEditingTask] = useState<any | null>(null);
   const [showTaskModal, setShowTaskModal] = useState(false);
+  const [isArchivedTasksModalOpen, setIsArchivedTasksModalOpen] = useState(false);
   
   // Получаем соответствие колонок со статусами
   const statusMapping = getColumnStatusMapping(columns);
@@ -413,6 +415,28 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
           }
           
           const updatedTask = await response.json();
+
+          // Если перенесли в Done, фиксируем как завершённую (обновлённая метка времени)
+          if (newStatus === 'done') {
+            // Простейшее ограничение: максимум 7 задач в Done, лишние — в архив
+            try {
+              const doneTasks = state.tasks
+                .filter(t => t.boardId === state.selectedBoard?.id && t.status === 'done' && !(t as any).isArchived)
+                .concat([{ ...draggedTask, status: 'done', updatedAt: new Date() } as any]);
+              if (doneTasks.length > 7) {
+                const oldest = [...doneTasks].sort((a, b) => {
+                  const at = new Date((a as any).updatedAt || (a as any).createdAt || Date.now()).getTime();
+                  const bt = new Date((b as any).updatedAt || (b as any).createdAt || Date.now()).getTime();
+                  return at - bt;
+                })[0];
+                if (oldest && oldest.id !== draggedTask.id) {
+                  dispatch({ type: 'ARCHIVE_TASK', payload: { taskId: oldest.id, archivedAt: new Date(), archivedBy: state.currentUser?.id } });
+                }
+              }
+            } catch (e) {
+              console.warn('Archive enforcement failed:', e);
+            }
+          }
           
           // Обновляем локальное состояние
           const taskWithUpdatedStatus = {
@@ -483,7 +507,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
       </div>
 
       {/* Columns */}
-      <div className="flex space-x-4 overflow-x-auto pb-4 h-full">
+      <div className="flex items-start space-x-4 overflow-x-auto pb-4">
         {columns
           .filter(col => {
             const name = String(col.name || col.title || '').toLowerCase();
@@ -535,12 +559,18 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
               key={column.id}
               column={column}
               tasks={columnTasks}
-              users={projectMembers.length > 0 ? projectMembers : users}
+              users={projectMembers.length > 0 ? projectMembers : state.users}
               onTaskCreate={() => handleCreateTask(column)}
               onTaskUpdate={handleTaskUpdated}
               onTaskDelete={handleTaskDeleted}
               onTaskComplete={(task) => handleTaskComplete(task)}
               onTaskOpen={(task) => { setEditingTask(task); setShowTaskModal(true); }}
+              archivedCount={(() => {
+                const mappedStatus = statusMapping[column.id];
+                if (mappedStatus !== 'done') return 0;
+                return (state.archivedTasks || []).filter((t: any) => String(t.board_id || t.boardId) === String(board.id)).length;
+              })()}
+              onOpenArchive={() => setIsArchivedTasksModalOpen(true)}
               onDragStart={(e, type, item) => handleDragStart(e, type, item)}
               onDragOver={(e) => handleDragOver(e, column.id)}
               onDrop={(e) => handleDrop(e, column.id)}
@@ -572,7 +602,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
           onTaskCreated={(task) => handleTaskCreated(task, selectedColumn.id)}
           columnId={selectedColumn.id}
           boardId={board.id}
-          users={projectMembers.length > 0 ? projectMembers : users}
+          users={projectMembers.length > 0 ? projectMembers : state.users}
         />
       )}
 
@@ -622,6 +652,14 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
               if (typeof window !== 'undefined') alert(`Ошибка удаления задачи: ${e instanceof Error ? e.message : String(e)}`);
             }
           }}
+        />
+      )}
+
+      {isArchivedTasksModalOpen && state.selectedBoard && (
+        <ArchivedTasksModal
+          isOpen={isArchivedTasksModalOpen}
+          onClose={() => setIsArchivedTasksModalOpen(false)}
+          boardId={state.selectedBoard.id}
         />
       )}
 
