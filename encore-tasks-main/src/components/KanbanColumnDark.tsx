@@ -207,26 +207,27 @@ className={`flex items-center justify-center w-5 h-5 rounded-full transition-tra
                     </h4>
                   </div>
 
-                  {/* Priority icon on the right */}
-                  <div className="ml-2 flex-shrink-0" title={
-                    task.priority === 'urgent' ? 'Срочная задача' :
-                    task.priority === 'high' ? 'Высокий приоритет' :
-                    task.priority === 'medium' ? 'Средний приоритет' :
-                    task.priority === 'low' ? 'Низкий приоритет' : ''
-                  }>
-                    {task.priority === 'urgent' && (
-                      <Zap className="w-4 h-4 text-red-400" />
-                    )}
-                    {task.priority === 'high' && (
-                      <AlertTriangle className="w-4 h-4 text-orange-400" />
-                    )}
-                    {task.priority === 'medium' && (
-                      <Clock className="w-4 h-4 text-yellow-400" />
-                    )}
-                    {task.priority === 'low' && (
-                      <CheckCircle className="w-4 h-4 text-green-400" />
-                    )}
-                  </div>
+                  {/* Priority icon on the right with custom tooltip */}
+                  {(() => {
+                    const info = task.priority === 'urgent'
+                      ? { label: 'Срочная задача', icon: <Zap className="w-4 h-4 text-red-400" /> }
+                      : task.priority === 'high'
+                        ? { label: 'Высокий приоритет', icon: <AlertTriangle className="w-4 h-4 text-orange-400" /> }
+                        : task.priority === 'medium'
+                          ? { label: 'Средний приоритет', icon: <Clock className="w-4 h-4 text-yellow-400" /> }
+                          : task.priority === 'low'
+                            ? { label: 'Низкий приоритет', icon: <CheckCircle className="w-4 h-4 text-green-400" /> }
+                            : null;
+                    if (!info) return null;
+                    return (
+                      <div className="ml-2 flex-shrink-0 relative group" aria-label={info.label}>
+                        {info.icon}
+                        <div className="absolute right-0 top-full mt-1 px-2 py-1 rounded-md bg-gray-900/90 border border-white/10 text-xs text-gray-200 shadow-lg whitespace-nowrap opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition pointer-events-none z-30">
+                          {info.label}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
                 
                 {task.description && (
