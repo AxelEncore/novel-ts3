@@ -32,8 +32,19 @@ export function Layout({ children }: LayoutProps) {
     setIsAuthModalOpen(!state.isAuthenticated);
   }, [state.isAuthenticated]);
 
+  // Restore last page on mount
+  useEffect(() => {
+    try {
+      const savedPage = typeof window !== 'undefined' ? localStorage.getItem('encore-last-page') : null;
+      if (savedPage) setCurrentPage(savedPage);
+    } catch {}
+  }, []);
+
   const handleNavigate = (page: string) => {
     setCurrentPage(page);
+    try {
+      if (typeof window !== 'undefined') localStorage.setItem('encore-last-page', page);
+    } catch {}
     
     // Mark all notifications as read when navigating to notifications page
     if (page === "notifications") {
@@ -73,6 +84,13 @@ export function Layout({ children }: LayoutProps) {
     const language = state.settings?.language || 'ru';
     document.documentElement.lang = language;
   }, [state.settings?.language]);
+
+  // Persist page changes (moved near top to ensure consistent hook order)
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') localStorage.setItem('encore-last-page', currentPage);
+    } catch {}
+  }, [currentPage]);
 
   // Get the current active project (needs to be calculated before useEffect)
   const currentProject = state.selectedProject || (state.projects.length > 0 ? state.projects[0] : undefined);

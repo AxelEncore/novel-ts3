@@ -489,26 +489,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             loadUsers()
           ]);
 
-          // Restore last opened project and board
-          try {
-            const savedProjectId = typeof window !== 'undefined' ? localStorage.getItem('encore-last-project-id') : null;
-            const savedBoardId = typeof window !== 'undefined' ? localStorage.getItem('encore-last-board-id') : null;
-
-            // Prefer saved project if exists in loaded projects; otherwise keep current or skip
-            const projects = (state.projects || []);
-            const targetProjectId = (savedProjectId && projects.find(p => p.id === savedProjectId)) ? savedProjectId : (projects[0]?.id || null);
-            if (targetProjectId) {
-              const targetProject = projects.find(p => p.id === targetProjectId);
-              if (targetProject) {
-                dispatch({ type: "SELECT_PROJECT", payload: targetProject });
-              }
-              // Load boards for project; loadBoards will prefer saved board
-              await loadBoards(targetProjectId);
-              // After boards loaded, try to select saved board (loadBoards handles it)
-            }
-          } catch (e) {
-            console.warn('Failed to restore last selection:', e);
-          }
+          // Note: selection restore is handled in a separate effect after projects load
         } else {
           console.log('❌ AppProvider: No authenticated user found');
         }
@@ -1113,6 +1094,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     } catch {}
   }, [state.selectedBoard?.id]);
+
+  // Restore last selected project/board once when projects become available
+  const hasRestoredSelection = React.useRef(false);
+  useEffect(() => {
+    if (hasRestoredSelection.current) return;
+    if (!state.isAuthenticated) return;
+    if (!state.projects || state.projects.length === 0) return;
+    try {
+      const savedProjectId = typeof window !== 'undefined' ? localStorage.getItem('encore-last-project-id') : null;
+      const preferredProject = savedProjectId ? state.projects.find(p => p.id === savedProjectId) : null;
+      const projectToUse = preferredProject || state.selectedProject || state.projects[0];
+      if (projectToUse && (!state.selectedProject || state.selectedProject.id !== projectToUse.id)) {
+        dispatch({ type: "SELECT_PROJECT", payload: projectToUse });
+      }
+      if (projectToUse?.id) {
+        loadBoards(projectToUse.id).catch(() => {});
+      }
+      hasRestoredSelection.current = true;
+    } catch (e) {
+      console.warn('Restore selection failed:', e);
+      hasRestoredSelection.current = true;
+    }
+  }, [state.isAuthenticated, state.projects?.length]);
 
   const contextValue = {
     state,
