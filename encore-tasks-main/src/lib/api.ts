@@ -149,13 +149,12 @@ class ApiClient {
         if (!response.ok) {
           // Handle specific HTTP errors
           if (response.status === 401) {
-            // Unauthorized - just return error, don't redirect
-            // The AuthModal will handle showing login form
-            return { error: 'Сессия истекла. Необходимо войти в систему заново.' };
+            // Unauthorized - surface backend message when available (e.g., wrong credentials)
+            return { error: (data && (data.error || data.message)) || 'Неверный email или пароль' };
           }
           
           if (response.status === 403) {
-            return { error: 'Недостаточно прав для выполнения операции' };
+            return { error: (data && (data.error || data.message)) || 'Недостаточно прав для выполнения операции' };
           }
           
           if (response.status === 429) {

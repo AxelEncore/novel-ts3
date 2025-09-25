@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { dbAdapter } from '@/lib/database-adapter';
-import bcrypt from 'bcryptjs';
 
 const databaseAdapter = dbAdapter;
 
@@ -31,7 +30,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    
+
     // Проверка существования пользователя
     const existingUser = await databaseAdapter.getUserByEmail(email);
     if (existingUser) {
@@ -41,29 +40,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Хеширование пароля
-    const saltRounds = 10;
-    const hashedPassword = await bcrypt.hash(password, saltRounds);
-
-    // Создание пользователя с правильной структурой данных
-    // Временно устанавливаем isApproved = true для тестирования
-    // В продакшене можно вернуть false для требования одобрения администратора
+    // Создание пользователя (хеширование выполняется в адаптере БД)
     const user = await databaseAdapter.createUser({
       email,
-      password_hash: hashedPassword,
+      password,
       name,
-      role: 'user',
-      isApproved: true
+      role: 'user'
     });
 
     // Возврат данных пользователя (без пароля) с правильной типизацией
+    const isApproved = Boolean(user.isApproved ?? user.is_approved ?? (user.approval_status === 'approved'));
     const userResult = {
       id: user.id,
       name: user.name,
       email: user.email,
       role: user.role,
-      approval_status: user.isApproved ? 'approved' : 'pending',
-      isApproved: user.isApproved,
+      approval_status: isApproved ? 'approved' : 'pending',
+      isApproved,
       avatar: user.avatar,
       createdAt: user.created_at
     };

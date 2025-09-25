@@ -75,16 +75,16 @@ export async function POST(request: NextRequest) {
       });
     }
     
-    // Временно отключена проверка approval_status для решения проблем с входом
     if (!user) {
       return NextResponse.json(
         { error: 'Неверный email или пароль' },
         { status: 401 }
       );
     }
-    
-    // Закомментировано: || user.approval_status !== 'approved'
-    // Это позволяет пользователям входить независимо от статуса одобрения
+
+    // Определяем одобрен ли пользователь (админа считаем одобренным всегда)
+    const role = String(user.role || '').toLowerCase();
+    const approved = role === 'admin' ? true : Boolean(user.isApproved ?? user.is_approved ?? (user.approval_status === 'approved'));
 
     // Проверка пароля
     console.log('🔐 Checking password for user:', user.email);
@@ -157,8 +157,8 @@ export async function POST(request: NextRequest) {
       name: user.name,
       email: user.email,
       role: user.role,
-      approval_status: user.isApproved ? 'approved' : 'pending',
-      status: 'active',
+      approval_status: approved ? 'approved' : 'pending',
+      status: approved ? 'active' : 'pending',
       avatar: user.avatar || null,
       createdAt: user.created_at,
       updatedAt: user.updated_at

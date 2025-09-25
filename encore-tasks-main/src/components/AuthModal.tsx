@@ -21,6 +21,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
     confirmPassword: ""
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [serverError, setServerError] = useState<string>("");
 
   if (!isOpen) return null;
 
@@ -56,13 +57,17 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
     e.preventDefault();
 
     if (!validateForm()) return;
+    setServerError("");
 
     if (isLogin) {
-      // Login logic using API
+      // Login logic using AppContext; on failure, fetch detailed error from API
       const success = await login(formData.email, formData.password);
       
       if (!success) {
-        setErrors({ email: "Неверный email или пароль" });
+        const probe = await api.login(formData.email, formData.password);
+        const message = probe.error || "Неверный email или пароль";
+        setErrors({ email: message });
+        setServerError(message);
         return;
       }
     } else {
@@ -70,42 +75,21 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
       const response = await api.register(formData.name, formData.email, formData.password);
       
       if (response.error) {
+        let message = response.error;
         if (response.error.includes('already exists')) {
-          setErrors({ email: "Пользователь с таким email уже существует" });
-        } else {
-          setErrors({ email: response.error });
+          message = "Пользователь с таким email уже существует";
         }
+        setErrors({ email: message });
+        setServerError(message);
         return;
       }
       
       // Проверяем, требуется ли подтверждение
       if ((response.data as any).requiresApproval) {
-        // Устанавливаем пользователя как аутентифицированного, но неодобренного
-        if (response.data.user) {
-          dispatch({
-            type: 'LOGIN',
-            payload: {
-              id: response.data.user.id,
-              name: response.data.user.name,
-              email: response.data.user.email,
-              role: response.data.user.role,
-              isApproved: false,
-              avatar: response.data.user.avatar,
-              created_at: response.data.user.created_at || new Date().toISOString(),
-              updated_at: response.data.user.updated_at || new Date().toISOString()
-            }
-          });
-        }
-        
+        // Не логиним пользователя до подтверждения администратором
+        // Просто закрываем модалку и очищаем форму
         onClose();
-        
-        // Reset form
-        setFormData({
-          name: "",
-          email: "",
-          password: "",
-          confirmPassword: ""
-        });
+        setFormData({ name: "", email: "", password: "", confirmPassword: "" });
         setErrors({});
         return;
       }
@@ -138,6 +122,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
     if (errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: "" }));
     }
+    if (serverError) setServerError("");
   };
 
   return (
@@ -199,6 +184,12 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
           onSubmit={handleSubmit}
           className="p-6 space-y-4"
           data-oid="0i2lf_1">
+
+          {serverError && (
+            <div className="p-3 rounded-lg border border-red-500/40 bg-red-500/10 text-red-300 text-sm">
+              {serverError}
+            </div>
+          )}
 
           {!isLogin &&
           <div data-oid="afiw-qf">

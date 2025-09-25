@@ -96,26 +96,29 @@ export function Layout({ children }: LayoutProps) {
   // Get the current active project (needs to be calculated before useEffect)
   const currentProject = state.selectedProject || (state.projects.length > 0 ? state.projects[0] : undefined);
 
-  // Auto-load boards when current project changes
+  // Auto-load boards when current project changes (skip for unapproved users)
   useEffect(() => {
+    if (state.currentUser?.isApproved === false) return;
     if (currentProject && currentProject.id) {
       console.log('🔄 Layout: Auto-loading boards for current project:', currentProject.name);
       loadBoards(currentProject.id).catch(error => {
         console.error('❌ Layout: Failed to auto-load boards:', error);
       });
     }
-  }, [currentProject?.id, loadBoards]);
+  }, [currentProject?.id, loadBoards, state.currentUser?.isApproved]);
 
-  // Auto-load tasks for selected project into global state (for Home/Calendar views)
+  // Auto-load tasks for selected project into global state (skip for unapproved users)
   useEffect(() => {
+    if (state.currentUser?.isApproved === false) return;
     const pid = currentProject?.id;
     if (pid) {
       loadTasks({ projectId: pid, boardId: '' as any }).catch(err => console.warn('Layout: loadTasks failed', err));
     }
-  }, [currentProject?.id, loadTasks]);
+  }, [currentProject?.id, loadTasks, state.currentUser?.isApproved]);
 
-  // Keep tasks in sync when other parts of the app modify tasks (create/update/delete/move)
+  // Keep tasks in sync when other parts of the app modify tasks (skip for unapproved users)
   useEffect(() => {
+    if (state.currentUser?.isApproved === false) return;
     const handler = () => {
       const pid = currentProject?.id;
       if (pid) loadTasks({ projectId: pid, boardId: '' as any }).catch(() => {});
@@ -128,7 +131,7 @@ export function Layout({ children }: LayoutProps) {
         window.removeEventListener('tasks-updated', handler);
       }
     };
-  }, [currentProject?.id, loadTasks]);
+  }, [currentProject?.id, loadTasks, state.currentUser?.isApproved]);
 
   // Show authentication modal if not authenticated
   if (!state.isAuthenticated && !state.isLoading) {
@@ -147,6 +150,17 @@ export function Layout({ children }: LayoutProps) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-900/20 via-purple-900/20 to-pink-900/20 dark:from-indigo-950/40 dark:via-purple-950/40 dark:to-pink-950/40 flex items-center justify-center">
         <LoadingSpinner size={128} color="rgb(99, 102, 241)" />
+      </div>
+    );
+  }
+
+  // Show waiting for admin approval screen if authenticated but not approved
+  if (state.isAuthenticated && state.currentUser && state.currentUser.isApproved === false) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-indigo-900/20 via-purple-900/20 to-pink-900/20 dark:from-indigo-950/40 dark:via-purple-950/40 dark:to-pink-950/40">
+        <main className="min-h-screen p-6">
+          <WelcomeScreen />
+        </main>
       </div>
     );
   }

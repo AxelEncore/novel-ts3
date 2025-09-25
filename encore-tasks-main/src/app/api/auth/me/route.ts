@@ -50,13 +50,19 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Определяем одобрен ли пользователь (админа считаем одобренным всегда)
+    const role = String(user.role || '').toLowerCase();
+    const approved = role === 'admin' ? true : Boolean(user.isApproved ?? user.is_approved ?? (user.approval_status === 'approved'));
+
     // Преобразование в формат API с правильной типизацией
     const userResult = {
       id: user.id,
       name: user.name,
       email: user.email,
       role: user.role,
-      status: 'active',
+      status: approved ? 'active' : 'pending',
+      approval_status: approved ? 'approved' : 'pending',
+      isApproved: approved,
       avatar: user.avatar || null,
       createdAt: user.created_at,
       updatedAt: user.updated_at
