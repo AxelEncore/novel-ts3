@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Task, Project } from "@/types";
 import { useApp } from "@/contexts/AppContext";
 import { cn, getInitials } from "@/lib/utils";
@@ -22,6 +22,7 @@ import {
   ChevronDown
 } from "lucide-react";
 import { useConfirmation } from "@/hooks/useConfirmation";
+import { createPortal } from "react-dom";
 import CreateTaskModal from "./CreateTaskModal";
 import BoardManager from "./BoardManager";
 import { CustomSelect } from "./CustomSelect";
@@ -52,6 +53,32 @@ export function TopBar({
   const [isUserProfileOpen, setIsUserProfileOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [showSearch, setShowSearch] = useState(false);
+
+  // Anchor and position for user dropdown (rendered in portal)
+  const profileBtnRef = useRef<HTMLDivElement | null>(null);
+  const [profileMenuPos, setProfileMenuPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  useEffect(() => {
+    if (!isUserProfileOpen) return;
+    if (typeof window === 'undefined') return;
+    const updatePos = () => {
+      const el = profileBtnRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const menuWidth = 256; // w-64
+      const margin = 8;
+      const top = Math.min(window.innerHeight - margin, rect.bottom + margin);
+      const desiredLeft = rect.right - menuWidth;
+      const left = Math.max(margin, Math.min(window.innerWidth - menuWidth - margin, desiredLeft));
+      setProfileMenuPos({ top, left });
+    };
+    updatePos();
+    window.addEventListener('resize', updatePos);
+    window.addEventListener('scroll', updatePos, true);
+    return () => {
+      window.removeEventListener('resize', updatePos);
+      window.removeEventListener('scroll', updatePos, true);
+    };
+  }, [isUserProfileOpen]);
 
   const handleCreateTask = async (taskData: {
     title: string;
@@ -304,7 +331,7 @@ export function TopBar({
           </button>
 
           {/* User Profile */}
-          <div className="relative">
+          <div className="relative" ref={profileBtnRef}>
             <button
               onClick={() => setIsUserProfileOpen(!isUserProfileOpen)}
               className="flex items-center gap-2 p-2 hover:bg-white/10 rounded-lg transition-colors"
@@ -325,9 +352,12 @@ export function TopBar({
               <ChevronDown className="w-4 h-4 text-gray-400" />
             </button>
 
-            {/* User Dropdown */}
-            {isUserProfileOpen && (
-              <div className="absolute right-0 top-full mt-2 w-64 bg-gray-900/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-xl z-[9999]">
+            {/* User Dropdown via portal to avoid clipping/z-index issues */}
+            {isUserProfileOpen && typeof window !== 'undefined' && createPortal(
+              <div
+                style={{ position: 'fixed', top: profileMenuPos.top, left: profileMenuPos.left, zIndex: 2147483647 }}
+                className="w-64 bg-gray-900/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-xl"
+              >
                 <div className="p-4 border-b border-white/10">
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center">
@@ -369,7 +399,8 @@ export function TopBar({
                     <span>Выйти</span>
                   </button>
                 </div>
-              </div>
+              </div>,
+              document.body
             )}
           </div>
         </div>
