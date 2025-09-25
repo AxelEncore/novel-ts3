@@ -67,18 +67,19 @@ export async function GET(request: NextRequest) {
     await databaseAdapter.initialize();
     const { searchParams } = new URL(request.url);
     
-    // Параметры запроса
-    const columnId = searchParams.get('column_id');
-    const boardId = searchParams.get('board_id');
-    const projectId = searchParams.get('project_id');
-    const assigneeId = searchParams.get('assignee_id');
-    const status = searchParams.get('status');
-    const priority = searchParams.get('priority');
-    const search = searchParams.get('search');
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100);
-    const sortBy = searchParams.get('sort_by') || 'created_at';
-    const sortOrder = searchParams.get('sort_order') || 'desc';
+    // Параметры запроса (поддерживаем и snake_case, и camelCase)
+    const getParam = (snake: string, camel: string) => searchParams.get(snake) || searchParams.get(camel);
+    const columnId = getParam('column_id', 'columnId');
+    const boardId = getParam('board_id', 'boardId');
+    const projectId = getParam('project_id', 'projectId');
+    const assigneeId = getParam('assignee_id', 'assigneeId');
+    const status = getParam('status', 'status');
+    const priority = getParam('priority', 'priority');
+    const search = getParam('search', 'search');
+    const page = parseInt(getParam('page', 'page') || '1');
+    const limit = Math.min(parseInt(getParam('limit', 'limit') || '50'), 100);
+    const sortBy = getParam('sort_by', 'sortBy') || 'created_at';
+    const sortOrder = getParam('sort_order', 'sortOrder') || 'desc';
     
     const offset = (page - 1) * limit;
 
@@ -110,7 +111,7 @@ export async function GET(request: NextRequest) {
     } else if (assigneeId) {
       hasAccess = isAdmin || (assigneeId === authResult.user.userId);
     } else {
-      // Без фильтров показываем только задачи пользователя
+      // Без фильтров показываем только задачи, связанные с пользователем
       hasAccess = true;
     }
 
@@ -130,18 +131,19 @@ export async function GET(request: NextRequest) {
       whereConditions.push(`t.column_id = $${queryParams.length + 1}`);
       queryParams.push(columnId);
     } else if (boardId) {
-      whereConditions.push(`c.board_id = $${queryParams.length + 1}`);
-      queryParams.push(boardId);
+      whereConditions.push(`(c.board_id = $${queryParams.length + 1} OR t.board_id = $${queryParams.length + 2})`);
+      queryParams.push(boardId, boardId);
     } else if (projectId) {
       whereConditions.push(`b.project_id = $${queryParams.length + 1}`);
       queryParams.push(projectId);
     } else if (assigneeId) {
-      whereConditions.push(`t.reporter_id = $${queryParams.length + 1}`);
+      // Задачи, назначенные пользователю
+      whereConditions.push(`EXISTS (SELECT 1 FROM task_assignees ta WHERE ta.task_id = t.id AND ta.user_id = $${queryParams.length + 1})`);
       queryParams.push(assigneeId);
     } else {
-      // По умолчанию показываем задачи созданные пользователем
-      whereConditions.push(`t.reporter_id = $${queryParams.length + 1}`);
-      queryParams.push(authResult.user.userId);
+      // По умолчанию: задачи, где пользователь назначен ИЛИ является создателем
+      whereConditions.push(`(EXISTS (SELECT 1 FROM task_assignees ta WHERE ta.task_id = t.id AND ta.user_id = $${queryParams.length + 1}) OR t.reporter_id = $${queryParams.length + 2})`);
+      queryParams.push(authResult.user.userId, authResult.user.userId);
     }
 
     if (status) {
@@ -164,19 +166,33 @@ export async function GET(request: NextRequest) {
 
     // Валидация сортировки
     const allowedSortFields = ['title', 'priority', 'status', 'created_at', 'updated_at', 'position'];
-    const validSortBy = allowedSortFields.includes(sortBy) ? sortBy : 'created_at';
-    const validSortOrder = ['asc', 'desc'].includes(sortOrder.toLowerCase()) ? sortOrder.toUpperCase() : 'DESC';
+    const normalizedSortBy = sortBy.includes('_') ? sortBy : sortBy.replace(/[A-Z]/g, m => `_${m.toLowerCase()}`);
+    const validSortBy = allowedSortFields.includes(normalizedSortBy) ? normalizedSortBy : 'created_at';
+    const validSortOrder = ['asc', 'desc'].includes(String(sortOrder).toLowerCase()) ? String(sortOrder).toUpperCase() : 'DESC';
 
     // Основной запрос (убираем несуществующие таблицы task_assignees)
     const tasksQuery = `
       SELECT 
-        t.id, t.title, t.description, t.column_id, t.priority, t.status, t.position, 
-        t.created_at, t.updated_at, t.reporter_id, 
-        c.title as column_name, b.name as board_name, p.name as project_name, 
-        u.email as reporter_email 
+        t.id,
+        t.title,
+        t.description,
+        t.column_id as "columnId",
+        t.priority,
+        t.status,
+        t.position,
+        t.created_at as "createdAt",
+        t.updated_at as "updatedAt",
+        t.due_date as "dueDate",
+        t.reporter_id as "reporterId",
+        b.id as "boardId",
+        p.id as "projectId",
+        c.title as "columnTitle",
+        b.name as "boardName",
+        p.name as "projectName",
+        u.email as "reporterEmail"
       FROM tasks t 
       LEFT JOIN columns c ON t.column_id = c.id 
-      LEFT JOIN boards b ON c.board_id = b.id 
+      LEFT JOIN boards b ON b.id = COALESCE(c.board_id, t.board_id)
       LEFT JOIN projects p ON b.project_id = p.id 
       LEFT JOIN users u ON t.reporter_id = u.id 
       WHERE ${whereConditions.join(' AND ')} 
@@ -196,7 +212,10 @@ export async function GET(request: NextRequest) {
         [row.id]
       );
       const arows = Array.isArray(ares) ? ares : (ares as any).rows || [];
-      tasksWithAssignees.push({ ...row, assignees: arows.map((r: any) => ({ id: r.id, name: r.name || r.email })) });
+      tasksWithAssignees.push({
+        ...row,
+        assignees: arows.map((r: any) => ({ id: r.id, name: r.name || r.email }))
+      });
     }
 
     // Запрос для подсчета общего количества

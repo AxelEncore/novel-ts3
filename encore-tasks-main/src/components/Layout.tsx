@@ -23,7 +23,7 @@ interface LayoutProps {
 }
 
 export function Layout({ children }: LayoutProps) {
-  const { state, dispatch, loadProjects, loadUsers, loadBoards } = useApp();
+  const { state, dispatch, loadProjects, loadUsers, loadBoards, loadTasks } = useApp();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [currentPage, setCurrentPage] = useState("boards");
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -105,6 +105,30 @@ export function Layout({ children }: LayoutProps) {
       });
     }
   }, [currentProject?.id, loadBoards]);
+
+  // Auto-load tasks for selected project into global state (for Home/Calendar views)
+  useEffect(() => {
+    const pid = currentProject?.id;
+    if (pid) {
+      loadTasks({ projectId: pid, boardId: '' as any }).catch(err => console.warn('Layout: loadTasks failed', err));
+    }
+  }, [currentProject?.id, loadTasks]);
+
+  // Keep tasks in sync when other parts of the app modify tasks (create/update/delete/move)
+  useEffect(() => {
+    const handler = () => {
+      const pid = currentProject?.id;
+      if (pid) loadTasks({ projectId: pid, boardId: '' as any }).catch(() => {});
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('tasks-updated', handler);
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('tasks-updated', handler);
+      }
+    };
+  }, [currentProject?.id, loadTasks]);
 
   // Show authentication modal if not authenticated
   if (!state.isAuthenticated && !state.isLoading) {

@@ -67,7 +67,7 @@ export function TeamPage() {
 
   const getUserStats = (userId: string) => {
     const userTasks = state.tasks.filter(
-      (task) => task.assignee_id === userId || task.created_by === userId
+      (task) => (task.assignees?.some(a => a.id === userId)) || task.reporter_id === userId
     );
     const completedTasks = userTasks.filter((task) => task.status === "done");
     const inProgressTasks = userTasks.filter(
@@ -119,7 +119,7 @@ export function TeamPage() {
 
   const getMemberTasks = (memberId: string) => {
     return state.tasks.filter(task => 
-      task.assignee_id === memberId || task.created_by === memberId
+      (task.assignees?.some(a => a.id === memberId)) || task.reporter_id === memberId
     );
   };
 

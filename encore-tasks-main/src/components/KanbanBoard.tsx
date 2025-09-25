@@ -295,6 +295,9 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
     if (onTaskUpdate) {
       onTaskUpdate();
     }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('tasks-updated'));
+    }
   };
 
 
@@ -310,6 +313,9 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
     if (onTaskUpdate) {
       onTaskUpdate();
     }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('tasks-updated'));
+    }
   };
 
   // Обработка удаления задачи
@@ -321,6 +327,9 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
     
     if (onTaskUpdate) {
       onTaskUpdate();
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('tasks-updated'));
     }
   };
 
@@ -444,6 +453,9 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
       }
 
       if (onTaskUpdate) onTaskUpdate();
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('tasks-updated'));
+      }
     } catch (error) {
       console.error('Ошибка при переключении статуса задачи:', error);
       toast.error('Не удалось обновить статус задачи');
@@ -571,6 +583,9 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
         } catch (error) {
           console.error('Ошибка при перемещении задачи:', error);
           toast.error('Ошибка при перемещении задачи');
+        }
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('tasks-updated'));
         }
       }
     }

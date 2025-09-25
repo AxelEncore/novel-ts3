@@ -237,23 +237,33 @@ const convertApiBoardToBoard = (apiBoard: any): Board => ({
   updated_at: apiBoard.updated_at || apiBoard.updatedAt
 });
 
-const convertApiTaskToTask = (apiTask: ApiTask): Task => ({
+const convertApiTaskToTask = (apiTask: any): Task => ({
   id: apiTask.id,
   title: apiTask.title,
   description: apiTask.description || '',
   status: apiTask.status as TaskStatus,
   priority: apiTask.priority,
-  assignees: apiTask.assignees.map(convertApiUserToUser) || [],
-  reporter_id: apiTask.reporterId,
-  project_id: apiTask.projectId,
-  board_id: apiTask.boardId,
-  due_date: apiTask.deadline,
-  attachments: [], // Will be loaded separately if needed
-  comments: [], // Will be loaded separately if needed
-  tags: apiTask.tags.map(tag => tag.name) || [],
-  created_at: apiTask.createdAt,
-  updated_at: apiTask.updatedAt,
-  position: apiTask.position
+  assignees: Array.isArray(apiTask.assignees) ? apiTask.assignees.map((a: any) => convertApiUserToUser({
+    id: a.id,
+    name: a.name || a.username || a.email || 'User',
+    email: a.email || '',
+    role: (a.role as any) || 'user',
+    status: (a.status as any) || 'active',
+    approval_status: (a.approval_status as any) || 'approved',
+    avatar: (a.avatar as any) || '',
+    createdAt: (a.created_at as any) || '',
+    updatedAt: (a.updated_at as any) || ''
+  } as ApiUser)) : [],
+  reporter_id: apiTask.reporterId || apiTask.reporter_id,
+  project_id: apiTask.projectId || apiTask.project_id,
+  board_id: apiTask.boardId || apiTask.board_id,
+  due_date: apiTask.dueDate || apiTask.deadline || apiTask.due_date || null,
+  attachments: [],
+  comments: [],
+  tags: Array.isArray(apiTask.tags) ? apiTask.tags.map((tag: any) => tag.name || tag) : [],
+  created_at: apiTask.createdAt || apiTask.created_at,
+  updated_at: apiTask.updatedAt || apiTask.updated_at,
+  position: apiTask.position ?? 0
 });
 
 function appReducer(state: AppState, action: AppAction): AppState {
@@ -755,8 +765,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return;
       }
       
-      if (response.data.tasks) {
-        const tasks = response.data.tasks.map(convertApiTaskToTask);
+      const apiTasks = response.data?.data?.tasks || response.data?.tasks;
+      if (apiTasks) {
+        const tasks = apiTasks.map(convertApiTaskToTask);
         dispatch({ type: "SET_TASKS", payload: tasks });
       }
     } catch (error) {
@@ -1025,6 +1036,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (response.data.task) {
         const task = convertApiTaskToTask(response.data.task);
         dispatch({ type: "ADD_TASK", payload: task });
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('tasks-updated'));
+        }
         return true;
       }
       
@@ -1047,6 +1061,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (response.data.task) {
         const task = convertApiTaskToTask(response.data.task);
         dispatch({ type: "UPDATE_TASK", payload: task });
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('tasks-updated'));
+        }
         return true;
       }
       
@@ -1067,6 +1084,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       
       dispatch({ type: "DELETE_TASK", payload: taskId });
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('tasks-updated'));
+      }
       return true;
     } catch (error) {
       console.error('Failed to delete task:', error);

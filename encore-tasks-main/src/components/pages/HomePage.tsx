@@ -23,30 +23,46 @@ export function HomePage({ onNavigate }: HomePageProps) {
 
   const today = new Date();
   
-  // Filter tasks for current user only
-  const userTasks = state.tasks.filter((task) => 
-    task.assignees?.some((a: any) => a.id === state.currentUser?.id) || false
-  );
-  
-  const todayTasks = userTasks.filter((task) => {
-    const taskDate = new Date(task.created_at);
-    return taskDate.toDateString() === today.toDateString();
-  });
+  // Помощники
+  const isAssignedToMe = (task: any) => task.assignees?.some((a: any) => a.id === state.currentUser?.id) || false;
 
-  const completedTasks = userTasks.filter((task) => task.status === "done");
-  const inProgressTasks = userTasks.filter(
-    (task) => task.status === "in_progress"
-  );
+  // Задачи пользователя по текущему проекту (state.tasks уже загружены для проекта)
+  const userTasks = state.tasks.filter(isAssignedToMe);
+  const archivedUserTasks = (state.archivedTasks || []).filter(isAssignedToMe);
+  
+  // Недавние (исключая выполненные)
+  const recentTasks = [...userTasks]
+    .filter((t) => t.status !== 'done')
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, 5);
+
+  // Счётчики
+  const completedActive = userTasks.filter((task) => task.status === "done");
+  const completedAllTime = completedActive.length + archivedUserTasks.length; // бесконечный счётчик, включает архив
+  const inProgressTasks = userTasks.filter((task) => task.status !== "done");
   const overdueTasks = userTasks.filter((task) => {
     if (!task.due_date) return false;
     return new Date(task.due_date) < today && task.status !== "done";
   });
 
-  const dueSoonTasks = userTasks.filter((task) => {
+  // Ближайшие задачи по дедлайну (по умолчанию окно 7 дней)
+  const dueSoonTasksBase = userTasks.filter((task) => {
     if (!task.due_date) return false;
     const days = getDaysUntilDeadline(new Date(task.due_date));
-    return days <= 3 && days >= 0 && task.status !== "done";
+    return days >= 0 && days <= 7 && task.status !== "done";
   });
+
+  // "Требуют внимания": сперва просроченные, затем ближайшие; если пусто — возьмём ближайшие 14 дней как запасной вариант
+  const attentionTasks = (() => {
+    const primary = [...overdueTasks, ...dueSoonTasksBase];
+    if (primary.length > 0) return primary;
+    const fallback = userTasks.filter((task) => {
+      if (!task.due_date) return false;
+      const days = getDaysUntilDeadline(new Date(task.due_date));
+      return days >= 0 && days <= 14 && task.status !== "done";
+    });
+    return fallback;
+  })();
 
   const myTasks = state.tasks.filter(
     (task) => task.assignees?.some((a: any) => a.id === state.currentUser?.id) || false
@@ -79,8 +95,8 @@ export function HomePage({ onNavigate }: HomePageProps) {
     bgColor: "bg-yellow-500/10"
   },
   {
-    title: "Выполнено",
-    value: completedTasks.length,
+    title: "Выполнено (всего)",
+    value: completedAllTime,
     icon: CheckCircle2,
     color: "text-green-400",
     bgColor: "bg-green-500/10"
@@ -143,8 +159,11 @@ export function HomePage({ onNavigate }: HomePageProps) {
               </div>
             </div>
           </div>
-        )}
-      </div>
+            )}
+            {attentionTasks.length === 0 && (
+              <p className="text-gray-400 text-center py-4">Нет задач, требующих внимания</p>
+            )}
+          </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6" data-oid="pbj9dii">
         {/* Recent Tasks */}
@@ -160,7 +179,7 @@ export function HomePage({ onNavigate }: HomePageProps) {
             Недавние задачи
           </h2>
           <div className="space-y-3" data-oid="6m_h.tk">
-            {todayTasks.slice(0, 5).map((task) =>
+            {recentTasks.map((task) =>
             <div
               key={task.id}
               className="flex items-center gap-3 p-3 bg-white/5 rounded-lg cursor-pointer hover:bg-white/10 transition-colors"
@@ -207,11 +226,11 @@ export function HomePage({ onNavigate }: HomePageProps) {
                 </div>
               </div>
             )}
-            {todayTasks.length === 0 &&
-            <p className="text-gray-400 text-center py-4" data-oid="rcdgb-3">
-                Сегодня задач не создавалось
+            {recentTasks.length === 0 && (
+              <p className="text-gray-400 text-center py-4" data-oid="rcdgb-3">
+                Недавних задач не найдено
               </p>
-            }
+            )}
           </div>
         </div>
 
@@ -231,7 +250,7 @@ export function HomePage({ onNavigate }: HomePageProps) {
             Требуют внимания
           </h2>
           <div className="space-y-3" data-oid="a.o_d8p">
-            {[...overdueTasks, ...dueSoonTasks].slice(0, 5).map((task) =>
+            {attentionTasks.slice(0, 5).map((task) =>
             <div
               key={task.id}
               className="flex items-center gap-3 p-3 bg-white/5 rounded-lg cursor-pointer hover:bg-white/10 transition-colors"
@@ -269,7 +288,7 @@ export function HomePage({ onNavigate }: HomePageProps) {
                 </div>
               </div>
             )}
-            {[...overdueTasks, ...dueSoonTasks].length === 0 &&
+            {attentionTasks.length === 0 &&
             <p className="text-gray-400 text-center py-4" data-oid="my.svq8">
                 Все задачи под контролем
               </p>
