@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { X, Plus, UserPlus, Trash2, Users } from 'lucide-react';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useApp } from '@/contexts/AppContext';
 import { toast } from 'sonner';
 
@@ -164,7 +165,7 @@ export function ProjectMembersModal({ isOpen, onClose, projectId }: ProjectMembe
                 className="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
               >
                 {addingMember ? (
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <LoadingSpinner size={16} color="#ffffff" />
                 ) : (
                   <UserPlus className="w-4 h-4" />
                 )}
@@ -178,7 +179,7 @@ export function ProjectMembersModal({ isOpen, onClose, projectId }: ProjectMembe
             <h3 className="text-lg font-medium text-white mb-4">Текущие участники</h3>
             {loading ? (
               <div className="flex items-center justify-center py-8">
-                <div className="w-8 h-8 border-2 border-primary-500/30 border-t-primary-500 rounded-full animate-spin" />
+                <LoadingSpinner size={32} color="rgb(59, 130, 246)" />
               </div>
             ) : members.length === 0 ? (
               <div className="text-center py-8">

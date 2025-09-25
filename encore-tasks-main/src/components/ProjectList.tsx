@@ -1,6 +1,7 @@
 import React, { useState, useContext, useEffect } from 'react';
 import { Search, Plus, Filter, SortAsc, SortDesc, Archive, ArchiveRestore, Grid, List } from 'lucide-react';
 import { AppContext } from '../context/AppContext';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { ProjectWithStats, ProjectFilters, ProjectSort } from '../types/core.types';
 import ProjectCard from './ProjectCard';
 import CreateProjectModal from './CreateProjectModal';
@@ -131,7 +132,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ onProjectSelect }) => {
   if (loading && projects.length === 0) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <LoadingSpinner size={32} />
       </div>
     );
   }

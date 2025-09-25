@@ -2,6 +2,7 @@
 
 import React, { useState, useContext, useEffect } from 'react';
 import { X, Users, Hash, MessageSquare, Plus, Trash2, AlertCircle, Save, MessageCircle } from 'lucide-react';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useApp } from '../contexts/AppContext';
 import { User, CreateProjectDto, ProjectWithStats, Project } from '../types/core.types';
 import { toast } from 'sonner';
@@ -415,7 +416,7 @@ export function CreateProjectModal({
             style={{ pointerEvents: isSubmitting ? 'none' : 'auto' }}>
 
             {isSubmitting ? (
-              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              <LoadingSpinner size={16} color="#ffffff" />
             ) : (
               <Save className="w-4 h-4" data-oid="h9j_v5c" />
             )}

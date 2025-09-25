@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Grid, List, Calendar, Users, Clock, AlertCircle } from 'lucide-react';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { Board, Column, Task, Project } from '@/types';
 import { projectService } from '@/services/projectService';
 import { useApp } from '@/contexts/AppContext';
@@ -114,7 +115,7 @@ const ProjectBoardsView: React.FC<ProjectBoardsViewProps> = ({
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <LoadingSpinner size={32} />
       </div>
     );
   }

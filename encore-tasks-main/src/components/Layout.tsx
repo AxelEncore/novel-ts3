@@ -16,6 +16,7 @@ import { WelcomeScreen } from "./WelcomeScreen";
 import { NoProjectsScreen } from "./NoProjectsScreen";
 import { AdminPanel } from "./AdminPanel";
 import { cn } from "@/lib/utils";
+import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 
 interface LayoutProps {
   children?: React.ReactNode;
@@ -121,7 +122,7 @@ export function Layout({ children }: LayoutProps) {
   if (state.isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-900/20 via-purple-900/20 to-pink-900/20 dark:from-indigo-950/40 dark:via-purple-950/40 dark:to-pink-950/40 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-indigo-500"></div>
+        <LoadingSpinner size={128} color="rgb(99, 102, 241)" />
       </div>
     );
   }

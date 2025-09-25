@@ -1,41 +1,84 @@
 import React from 'react';
 
-interface LoadingSpinnerProps {
-  size$1: 'sm' | 'md' | 'lg';
-  className$1: string;
-}
+type LoadingSpinnerProps = {
+  size?: number | string; // e.g. 40 or '40px'
+  color?: string; // e.g. 'rgb(51, 172, 241)' or '#33acf1'
+  speed?: string; // e.g. '1.4s'
+  bgOpacity?: number; // 0..1
+  className?: string;
+};
 
-export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({ 
-  size = 'md', 
-  className = '' 
+// Unified loader based on /loader.html
+export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
+  size = 40,
+  color = 'rgb(51, 172, 241)',
+  speed = '1.4s',
+  bgOpacity = 0.1,
+  className = ''
 }) => {
-  const sizeClasses = {
-    sm: 'w-4 h-4',
-    md: 'w-6 h-6',
-    lg: 'w-8 h-8'
-  };
+  const sizeValue = typeof size === 'number' ? `${size}px` : size;
 
   return (
-    <div className={`animate-spin ${sizeClasses[size]} ${className}`}>
-      <svg 
-        className="w-full h-full text-blue-600" 
-        fill="none" 
-        viewBox="0 0 24 24"
+    <div
+      className={className}
+      style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+    >
+      <svg
+        preserveAspectRatio="xMidYMid meet"
+        width="40"
+        height="40"
+        viewBox="0 0 40 40"
+        y="0px"
+        x="0px"
+        className="loader-container"
       >
-        <circle 
-          className="opacity-25" 
-          cx="12" 
-          cy="12" 
-          r="10" 
-          stroke="currentColor" 
+        <path
+          d="M29.760000000000005 18.72 c0 7.28 -3.9200000000000004 13.600000000000001 -9.840000000000002 16.96 c -2.8800000000000003 1.6800000000000002 -6.24 2.64 -9.840000000000002 2.64 c -3.6 0 -6.88 -0.96 -9.76 -2.64 c0 -7.28 3.9200000000000004 -13.52 9.840000000000002 -16.96 c2.8800000000000003 -1.6800000000000002 6.24 -2.64 9.76 -2.64 S26.880000000000003 17.040000000000003 29.760000000000005 18.72 c5.84 3.3600000000000003 9.76 9.68 9.840000000000002 16.96 c -2.8800000000000003 1.6800000000000002 -6.24 2.64 -9.76 2.64 c -3.6 0 -6.88 -0.96 -9.840000000000002 -2.64 c -5.84 -3.3600000000000003 -9.76 -9.68 -9.76 -16.96 c0 -7.28 3.9200000000000004 -13.600000000000001 9.76 -16.96 C25.84 5.120000000000001 29.760000000000005 11.440000000000001 29.760000000000005 18.72z"
+          pathLength="100"
           strokeWidth="4"
-        />
-        <path 
-          className="opacity-75" 
-          fill="currentColor" 
-          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-        />
+          fill="none"
+          className="loader-track"
+        ></path>
+        <path
+          d="M29.760000000000005 18.72 c0 7.28 -3.9200000000000004 13.600000000000001 -9.840000000000002 16.96 c -2.8800000000000003 1.6800000000000002 -6.24 2.64 -9.840000000000002 2.64 c -3.6 0 -6.88 -0.96 -9.76 -2.64 c0 -7.28 3.9200000000000004 -13.52 9.840000000000002 -16.96 c2.8800000000000003 -1.6800000000000002 6.24 -2.64 9.76 -2.64 S26.880000000000003 17.040000000000003 29.760000000000005 18.72 c5.84 3.3600000000000003 9.76 9.68 9.840000000000002 16.96 c -2.8800000000000003 1.6800000000000002 -6.24 2.64 -9.76 2.64 c -3.6 0 -6.88 -0.96 -9.840000000000002 -2.64 c -5.84 -3.3600000000000003 -9.76 -9.68 -9.76 -16.96 c0 -7.28 3.9200000000000004 -13.600000000000001 9.76 -16.96 C25.84 5.120000000000001 29.760000000000005 11.440000000000001 29.760000000000005 18.72z"
+          pathLength="100"
+          strokeWidth="4"
+          fill="none"
+          className="loader-car"
+        ></path>
       </svg>
+
+      <style jsx>{`
+        .loader-container {
+          --uib-size: ${sizeValue};
+          --uib-color: ${color};
+          --uib-speed: ${speed};
+          --uib-bg-opacity: ${bgOpacity};
+          height: var(--uib-size);
+          width: var(--uib-size);
+          transform-origin: center;
+          overflow: visible;
+        }
+        .loader-car {
+          fill: none;
+          stroke: var(--uib-color);
+          stroke-dasharray: 15, 85;
+          stroke-dashoffset: 0;
+          stroke-linecap: round;
+          animation: travel var(--uib-speed) linear infinite;
+          will-change: stroke-dasharray, stroke-dashoffset;
+          transition: stroke 0.5s ease;
+        }
+        .loader-track {
+          stroke: var(--uib-color);
+          opacity: var(--uib-bg-opacity);
+          transition: stroke 0.5s ease;
+        }
+        @keyframes travel {
+          0% { stroke-dashoffset: 0; }
+          100% { stroke-dashoffset: -100; }
+        }
+      `}</style>
     </div>
   );
-}
+};

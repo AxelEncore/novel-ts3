@@ -3,6 +3,7 @@ import { Plus, MoreHorizontal, Edit, Trash2, Users } from 'lucide-react';
 import { Board, Column, Task, User } from '@/types';
 import { useApp } from '@/contexts/AppContext';
 import { toast } from 'sonner';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import KanbanColumnDark from './KanbanColumnDark';
 import ArchivedTasksModal from './ArchivedTasksModal';
 import CreateTaskModal from './CreateTaskModal';
@@ -585,7 +586,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+        <LoadingSpinner size={48} />
       </div>
     );
   }
