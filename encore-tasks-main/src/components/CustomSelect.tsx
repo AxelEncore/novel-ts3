@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { ChevronDown, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -28,13 +29,18 @@ export function CustomSelect({
   disabled = false
 }: CustomSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [menuRect, setMenuRect] = useState<{ top: number; left: number; width: number } | null>(null);
   const selectRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const selectedOption = options.find(option => option.value === value);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (selectRef.current && !selectRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      const clickedInsideTrigger = selectRef.current && selectRef.current.contains(target);
+      const clickedInsideMenu = menuRef.current && menuRef.current.contains(target);
+      if (!clickedInsideTrigger && !clickedInsideMenu) {
         setIsOpen(false);
       }
     };
@@ -48,11 +54,23 @@ export function CustomSelect({
     setIsOpen(false);
   };
 
+  const openMenu = () => {
+    if (disabled) return;
+    setIsOpen((prev) => {
+      const next = !prev;
+      if (!prev && selectRef.current) {
+        const rect = selectRef.current.getBoundingClientRect();
+        setMenuRect({ top: rect.bottom + window.scrollY, left: rect.left + window.scrollX, width: rect.width });
+      }
+      return next;
+    });
+  };
+
   return (
     <div ref={selectRef} className={cn("relative", className)}>
       <button
         type="button"
-        onClick={() => !disabled && setIsOpen(!isOpen)}
+        onClick={openMenu}
         disabled={disabled}
         className={cn(
           "w-full min-w-[200px] px-4 py-3 bg-gray-800/80 backdrop-blur-sm border border-white/20 rounded-xl text-white",
@@ -79,13 +97,21 @@ export function CustomSelect({
         />
       </button>
 
-      {isOpen && (
-        <div className="absolute top-full left-0 w-full min-w-[200px] mt-2 bg-gray-800/95 backdrop-blur-xl border border-white/20 rounded-xl shadow-2xl z-[9999] max-h-60 overflow-y-auto">
+      {isOpen && menuRect && createPortal(
+        <div
+          ref={menuRef}
+          className="bg-gray-800/95 backdrop-blur-xl border border-white/20 rounded-xl shadow-2xl z-[99999] max-h-60 overflow-y-auto"
+          style={{ position: 'fixed', top: menuRect.top + 8, left: menuRect.left, width: menuRect.width }}
+          onMouseDown={(e) => {
+            // предотвращаем всплытие mousedown до document, чтобы не закрывать меню раньше времени
+            e.stopPropagation();
+          }}
+        >
           {options.map((option, index) => (
             <button
               key={`${option.value}-${index}`}
               type="button"
-              onClick={() => handleSelect(option.value)}
+              onMouseDown={() => handleSelect(option.value)}
               className={cn(
                 "w-full px-4 py-3 text-left hover:bg-white/15 transition-all duration-150",
                 "flex items-center justify-between first:rounded-t-xl last:rounded-b-xl",
@@ -107,7 +133,8 @@ export function CustomSelect({
               )}
             </button>
           ))}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

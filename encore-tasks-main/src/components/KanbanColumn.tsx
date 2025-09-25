@@ -62,6 +62,7 @@ const KanbanColumn: React.FC<KanbanColumnProps> = ({
   const tasks = (column.tasks || []).sort((a, b) => (a.position || 0) - (b.position || 0));
   const columnColorClass = COLUMN_TYPE_COLORS[column.type] || COLUMN_TYPE_COLORS.TODO;
   const columnIcon = COLUMN_TYPE_ICONS[column.type] || COLUMN_TYPE_ICONS.TODO;
+  const isDoneColumn = String(column?.type || '').toUpperCase() === 'DONE' || /(?:^|\s)(выполнено|завершено|done)(?:$|\s)/i.test(String(column?.name || ''));
 
   // Обработка перетаскивания задач внутри колонки
   const handleTaskDragOver = (e: React.DragEvent, taskIndex: number) => {
@@ -230,7 +231,7 @@ const KanbanColumn: React.FC<KanbanColumnProps> = ({
             )}
           </div>
           
-          {canManage && (
+          {canManage && !isDoneColumn && (
             <button
               onClick={onCreateTask}
               className="text-blue-600 hover:text-blue-700 flex items-center space-x-1"
@@ -278,8 +279,8 @@ const KanbanColumn: React.FC<KanbanColumnProps> = ({
           </div>
         )}
 
-        {/* Кнопка добавления задачи */}
-        {canManage && tasks.length > 0 && (
+        {/* Кнопка добавления задачи (скрыта для колонки "Выполнено") */}
+        {canManage && !isDoneColumn && tasks.length > 0 && (
           <button
             onClick={onCreateTask}
             className="w-full p-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-gray-400 hover:text-gray-600 transition-colors flex items-center justify-center space-x-2"

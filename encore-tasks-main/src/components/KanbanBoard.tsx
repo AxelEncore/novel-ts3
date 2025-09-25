@@ -663,13 +663,15 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
             const p = Number(t?.position ?? 0);
             return Number.isFinite(p) ? p : 0;
           };
-          const sortedByPositionDesc = [...columnTasks].sort((a, b) => getPos(b) - getPos(a));
+          const sortedByPosition = [...columnTasks].sort((a, b) => {
+            return state.sortOrder === 'asc' ? (getPos(a) - getPos(b)) : (getPos(b) - getPos(a));
+          });
 
           return (
               <KanbanColumnDark
               key={column.id}
               column={column}
-              tasks={sortedByPositionDesc}
+              tasks={sortedByPosition}
               users={projectMembers.length > 0 ? projectMembers : state.users}
               onTaskCreate={() => handleCreateTask(column)}
               onTaskUpdate={handleTaskUpdated}

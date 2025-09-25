@@ -8,6 +8,7 @@ import {
   Plus,
   Filter,
   SortAsc,
+  SortDesc,
   MoreHorizontal,
   Users,
   Calendar,
@@ -267,9 +268,14 @@ export function TopBar({
               <button
                 onClick={handleSort}
                 className="p-2 hover:bg-white/10 rounded-lg transition-colors text-gray-400 hover:text-white"
-                title="Сортировка"
+                title={state.sortOrder === "asc" ? "Порядок: по возрастанию" : "Порядок: по убыванию"}
+                aria-label={state.sortOrder === "asc" ? "Сортировка по возрастанию" : "Сортировка по убыванию"}
               >
-                <SortAsc className="w-5 h-5" />
+                {state.sortOrder === "asc" ? (
+                  <SortAsc className="w-5 h-5" />
+                ) : (
+                  <SortDesc className="w-5 h-5" />
+                )}
               </button>
 
               {/* Board Manager */}

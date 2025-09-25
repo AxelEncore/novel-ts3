@@ -137,6 +137,12 @@ const KanbanColumnDark: React.FC<KanbanColumnProps> = ({
     }
   };
 
+  // Определяем, является ли эта колонка "Выполнено"
+  const isDone = (() => {
+    const name = String(column.name || column.title || '').toLowerCase().trim();
+    return /(?:^|\s)(выполнено|завершено|done)(?:$|\s)/.test(name);
+  })();
+
   return (
     <div
       className={`flex-shrink-0 w-80 min-h-[200px] backdrop-blur-sm border rounded-xl transition-all duration-200 ${
@@ -330,14 +336,16 @@ className={`flex items-center justify-center w-5 h-5 rounded-full transition-tra
           )}
         </div>
 
-        {/* Add Task Button */}
-        <button
-          onClick={onTaskCreate}
-          className="w-full mt-4 p-3 border-2 border-dashed border-white/20 rounded-lg text-gray-400 hover:border-white/40 hover:text-white hover:bg-white/5 transition-all duration-200 flex items-center justify-center gap-2"
-        >
-          <Plus className="w-4 h-4" />
-          <span className="text-sm">Добавить задачу</span>
-        </button>
+        {/* Add Task Button (скрыта для колонки "Выполнено") */}
+        {!isDone && (
+          <button
+            onClick={onTaskCreate}
+            className="w-full mt-4 p-3 border-2 border-dashed border-white/20 rounded-lg text-gray-400 hover:border-white/40 hover:text-white hover:bg-white/5 transition-all duration-200 flex items-center justify-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            <span className="text-sm">Добавить задачу</span>
+          </button>
+        )}
 
         {/* Archive block for Done column */}
         {(typeof archivedCount === 'number' && archivedCount > 0) && (
