@@ -11,7 +11,7 @@ import {
 "lucide-react";
 
 interface CalendarProps {
-  onTaskClick$1: (task: Task) => void;
+  onTaskClick: (task: Task) => void;
 }
 
 export function Calendar({ onTaskClick }: CalendarProps) {
@@ -19,6 +19,13 @@ export function Calendar({ onTaskClick }: CalendarProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
 
   const today = new Date();
+  // Debug: log a small sample
+  React.useEffect(() => {
+    try {
+      const sample = (state.tasks || []).slice(0, 5).map((t: any) => ({ id: t.id, title: t.title, due_date: t?.due_date, deadline: t?.deadline, dueDate: t?.dueDate }));
+      console.log('[Calendar] Debug sample tasks:', sample);
+    } catch {}
+  }, [state.tasks]);
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
 
@@ -57,17 +64,83 @@ export function Calendar({ onTaskClick }: CalendarProps) {
     });
   }
 
+  const toDayKey = (d: Date): string => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+  const normalizeToDayKey = (raw: any): string | null => {
+    if (!raw) return null;
+    if (raw instanceof Date) return toDayKey(raw);
+    if (typeof raw === 'number') {
+      const ms = raw < 1e12 ? raw * 1000 : raw;
+      const d = new Date(ms);
+      return isNaN(d.getTime()) ? null : toDayKey(d);
+    }
+    if (typeof raw === 'string') {
+      const s = raw.trim();
+      if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+      const m = s.match(/^(\d{2})\.(\d{2})\.(\d{4})/);
+      if (m) {
+        const dd = m[1], mm = m[2], yyyy = m[3];
+        return `${yyyy}-${mm}-${dd}`;
+      }
+      const d = new Date(s);
+      if (!isNaN(d.getTime())) return toDayKey(d);
+      return null;
+    }
+    const d = new Date(raw);
+    return isNaN(d.getTime()) ? null : toDayKey(d);
+  };
+  const extractRawDate = (task: any): any => {
+    // Only deadline/due-like keys
+    const candidates = [task?.due_date, task?.deadline, task?.dueDate];
+    const first = candidates.find((v) => !!v);
+    if (first) return first;
+    try {
+      const keyMatches = (key: string) => /(dead|due|end)/i.test(key) && !/created/i.test(key);
+      for (const [k, v] of Object.entries(task || {})) {
+        if (!v) continue;
+        if (keyMatches(k) && (typeof v === 'string' || typeof v === 'number' || v instanceof Date)) {
+          const candidate = normalizeToDayKey(v);
+          if (candidate) return v;
+        }
+        if (typeof v === 'object' && !Array.isArray(v)) {
+          for (const [kk, vv] of Object.entries(v || {})) {
+            if (!vv) continue;
+            if (keyMatches(kk) && (typeof vv === 'string' || typeof vv === 'number' || vv instanceof Date)) {
+              const candidate = normalizeToDayKey(vv);
+              if (candidate) return vv;
+            }
+          }
+        }
+      }
+    } catch {}
+    return null;
+  };
   const getTasksForDate = (date: Date): Task[] => {
-    return state.tasks.filter((task) => {
-      if (!task.deadline) return false;
-      const taskDate = new Date(task.deadline);
-      return taskDate.toDateString() === date.toDateString();
-    }).sort((a, b) => {
-      // Sort to show current user's tasks first
-      const aAssignees = a.assignees || [];
-      const bAssignees = b.assignees || [];
-      const aIsCurrentUser = aAssignees.some(assignee => assignee.id === state.currentUser$2.id) ? 1 : 0;
-      const bIsCurrentUser = bAssignees.some(assignee => assignee.id === state.currentUser$4.id) $5 1 : 0;
+    const dayKey = toDayKey(date);
+    return state.tasks.filter((task: any) => {
+      const rawPrimary = task?.due_date ?? task?.deadline ?? task?.dueDate;
+      const raw = rawPrimary ?? extractRawDate(task);
+      const taskKey = normalizeToDayKey(raw);
+      if (!taskKey) return false;
+      return taskKey === dayKey;
+    }).sort((a: any, b: any) => {
+      // Sort to show current user's tasks first (tolerate different id shapes)
+      const toAssignees = (t: any) => (t.assignees && t.assignees.length > 0) ? t.assignees : (t.assignee ? [t.assignee] : []);
+      const uid = state.currentUser?.id;
+      const idMatches = (x: any) => {
+        if (!uid) return false;
+        if (!x) return false;
+        if (typeof x === 'string') return x === uid;
+        return (x.id || x.userId || x.user_id) === uid;
+      };
+      const aSingle = a.assignee_id || a.assigneeId || a.assigned_to || a.assignedTo;
+      const bSingle = b.assignee_id || b.assigneeId || b.assigned_to || b.assignedTo;
+      const aIsCurrentUser = toAssignees(a).some(idMatches) || (aSingle ? String(aSingle) === String(uid) : false) ? 1 : 0;
+      const bIsCurrentUser = toAssignees(b).some(idMatches) || (bSingle ? String(bSingle) === String(uid) : false) ? 1 : 0;
       return bIsCurrentUser - aIsCurrentUser;
     });
   };
@@ -221,7 +294,7 @@ export function Calendar({ onTaskClick }: CalendarProps) {
                     return (
                       <button
                         key={task.id}
-                        onClick={() => onTaskClick$1.(task)}
+                        onClick={() => onTaskClick(task)}
                         className={cn(
                           "w-full text-left p-1.5 rounded text-xs truncate transition-colors hover:scale-105",
                           priorityColors[task.priority]

@@ -237,34 +237,137 @@ const convertApiBoardToBoard = (apiBoard: any): Board => ({
   updated_at: apiBoard.updated_at || apiBoard.updatedAt
 });
 
-const convertApiTaskToTask = (apiTask: any): Task => ({
-  id: apiTask.id,
-  title: apiTask.title,
-  description: apiTask.description || '',
-  status: apiTask.status as TaskStatus,
-  priority: apiTask.priority,
-  assignees: Array.isArray(apiTask.assignees) ? apiTask.assignees.map((a: any) => convertApiUserToUser({
-    id: a.id,
-    name: a.name || a.username || a.email || 'User',
-    email: a.email || '',
-    role: (a.role as any) || 'user',
-    status: (a.status as any) || 'active',
-    approval_status: (a.approval_status as any) || 'approved',
-    avatar: (a.avatar as any) || '',
-    createdAt: (a.created_at as any) || '',
-    updatedAt: (a.updated_at as any) || ''
-  } as ApiUser)) : [],
-  reporter_id: apiTask.reporterId || apiTask.reporter_id,
-  project_id: apiTask.projectId || apiTask.project_id,
-  board_id: apiTask.boardId || apiTask.board_id,
-  due_date: apiTask.dueDate || apiTask.deadline || apiTask.due_date || null,
-  attachments: [],
-  comments: [],
-  tags: Array.isArray(apiTask.tags) ? apiTask.tags.map((tag: any) => tag.name || tag) : [],
-  created_at: apiTask.createdAt || apiTask.created_at,
-  updated_at: apiTask.updatedAt || apiTask.updated_at,
-  position: apiTask.position ?? 0
-});
+const convertApiTaskToTask = (apiTask: any): Task => {
+  // Normalize single assignee id from various API shapes
+  const singleAssigneeId = apiTask.assigneeId || apiTask.assignee_id || apiTask.assigned_to || apiTask.assignedTo;
+
+  // Build assignees array when provided, otherwise derive from singleAssigneeId
+  const mappedAssignees = Array.isArray(apiTask.assignees)
+    ? apiTask.assignees.map((a: any) => convertApiUserToUser({
+        id: a.id,
+        name: a.name || a.username || a.email || 'User',
+        email: a.email || '',
+        role: (a.role as any) || 'user',
+        status: (a.status as any) || 'active',
+        approval_status: (a.approval_status as any) || 'approved',
+        avatar: (a.avatar as any) || '',
+        createdAt: (a.created_at as any) || '',
+        updatedAt: (a.updated_at as any) || ''
+      } as ApiUser))
+    : (singleAssigneeId ? [{ id: String(singleAssigneeId), name: String(singleAssigneeId), email: '', role: 'user', isApproved: true, created_at: '', updated_at: '' }] : []);
+
+  // Normalize due date across formats to YYYY-MM-DD
+  const rawDue = apiTask.dueDate || apiTask.deadline || apiTask.due_date || null;
+  let due_date: string | null = null;
+  const parseToDay = (val: any): string | null => {
+    if (!val) return null;
+    if (val instanceof Date) return val.toISOString().slice(0, 10);
+    if (typeof val === 'number') {
+      const ms = val < 1e12 ? val * 1000 : val;
+      return new Date(ms).toISOString().slice(0, 10);
+    }
+    if (typeof val === 'string') {
+      const s = val.trim();
+      if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+      const m = s.match(/^(\d{2})\.(\d{2})\.(\d{4})/);
+      if (m) {
+        const dd = m[1], mm = m[2], yyyy = m[3];
+        return `${yyyy}-${mm}-${dd}`;
+      }
+      const d = new Date(s);
+      if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+      return null;
+    }
+    const d = new Date(val);
+    return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+  };
+  if (rawDue) {
+    due_date = parseToDay(rawDue);
+  }
+  if (!due_date) {
+    // Scan API task for alternative deadline keys (shallow + one nested level)
+    try {
+      const consider = (k: string) => /(dead|due|end|finish|expires|until)/i.test(k) && !/(created|update)/i.test(k);
+      for (const [k, v] of Object.entries(apiTask || {})) {
+        if (!v) continue;
+        if (consider(k)) {
+          const parsed = parseToDay(v);
+          if (parsed) { due_date = parsed; break; }
+        }
+        if (typeof v === 'object' && !Array.isArray(v)) {
+          for (const [kk, vv] of Object.entries(v || {})) {
+            if (!vv) continue;
+            if (consider(kk)) {
+              const parsed2 = parseToDay(vv);
+              if (parsed2) { due_date = parsed2; break; }
+            }
+          }
+          if (due_date) break;
+        }
+      }
+    } catch {}
+  }
+
+  // Normalize created_at
+  const createdRaw = apiTask.createdAt || apiTask.created_at || apiTask.created || apiTask.created_date || apiTask.createdDate || null;
+  const normalizeDateToIsoDay = (raw: any): string | null => {
+    if (!raw) return null;
+    if (raw instanceof Date) return raw.toISOString();
+    if (typeof raw === 'number') {
+      const ms = raw < 1e12 ? raw * 1000 : raw;
+      return new Date(ms).toISOString();
+    }
+    if (typeof raw === 'string') {
+      const s = raw.trim();
+      if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+        // Already ISO-like; add time if missing via Date parse
+        const d = new Date(s);
+        if (!isNaN(d.getTime())) return d.toISOString();
+        // Replace space with T if "YYYY-MM-DD HH:mm:ss"
+        const t = s.replace(' ', 'T');
+        const d2 = new Date(t);
+        if (!isNaN(d2.getTime())) return d2.toISOString();
+        return `${s.slice(0,10)}T00:00:00.000Z`;
+      }
+      const m = s.match(/^(\d{2})\.(\d{2})\.(\d{4})/); // dd.MM.yyyy
+      if (m) {
+        const dd = m[1], mm = m[2], yyyy = m[3];
+        return new Date(`${yyyy}-${mm}-${dd}T00:00:00`).toISOString();
+      }
+      const d = new Date(s);
+      if (!isNaN(d.getTime())) return d.toISOString();
+      return null;
+    }
+    const d = new Date(raw);
+    return isNaN(d.getTime()) ? null : d.toISOString();
+  };
+  const created_at = normalizeDateToIsoDay(createdRaw) || new Date().toISOString();
+
+  // Normalize updated_at similarly
+  const updatedRaw = apiTask.updatedAt || apiTask.updated_at || apiTask.updated || apiTask.updated_date || apiTask.updatedDate || null;
+  const updated_at = normalizeDateToIsoDay(updatedRaw) || created_at;
+
+  return {
+    id: apiTask.id,
+    title: apiTask.title,
+    description: apiTask.description || '',
+    status: apiTask.status as TaskStatus,
+    priority: apiTask.priority,
+    assignees: mappedAssignees,
+    // Keep single id for filtering compatibility
+    assignee_id: singleAssigneeId ? String(singleAssigneeId) : undefined,
+    reporter_id: apiTask.reporterId || apiTask.reporter_id,
+    project_id: apiTask.projectId || apiTask.project_id,
+    board_id: apiTask.boardId || apiTask.board_id,
+    due_date,
+    attachments: [],
+    comments: [],
+    tags: Array.isArray(apiTask.tags) ? apiTask.tags.map((tag: any) => tag.name || tag) : [],
+    created_at,
+    updated_at,
+    position: apiTask.position ?? 0
+  } as any;
+};
 
 function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
@@ -767,7 +870,63 @@ export function AppProvider({ children }: { children: ReactNode }) {
       
       const apiTasks = response.data?.data?.tasks || response.data?.tasks;
       if (apiTasks) {
-        const tasks = apiTasks.map(convertApiTaskToTask);
+        try {
+          const sampleRaw = (apiTasks || []).slice(0, 5).map((t: any) => {
+            const keys = Object.keys(t || {});
+            const candidates: Record<string, any> = {};
+            try {
+              for (const [k, v] of Object.entries(t || {})) {
+                if (!v) continue;
+                if (/(dead|due|end|finish|expires|until)/i.test(k) && !/(created|update)/i.test(k)) {
+                  candidates[k] = v;
+                }
+                if (typeof v === 'object' && !Array.isArray(v)) {
+                  for (const [kk, vv] of Object.entries(v || {})) {
+                    if (!vv) continue;
+                    if (/(dead|due|end|finish|expires|until)/i.test(kk) && !/(created|update)/i.test(kk)) {
+                      candidates[`${k}.${kk}`] = vv;
+                    }
+                  }
+                }
+              }
+            } catch {}
+            return { id: t?.id, title: t?.title, keys, dueDate: t?.dueDate, due_date: t?.due_date, deadline: t?.deadline, candidates };
+          });
+          console.log('[AppContext] Raw tasks sample before convert:', sampleRaw);
+        } catch {}
+        // Initial conversion
+        const initialTasks = apiTasks.map(convertApiTaskToTask);
+        // Enrich tasks with detailed endpoints to fetch deadline if missing
+        let tasks = initialTasks;
+        try {
+          const enriched = await Promise.all(initialTasks.map(async (t: any) => {
+            if (t?.due_date) return t;
+            try {
+              const detail = await api.getTask(t.id);
+              const payload = (detail as any)?.data ?? null;
+              // Try multiple shapes: {success, data:{task}}, {task}, or direct task
+              const apiTaskDetail = payload?.data?.task ?? payload?.task ?? (payload?.data ?? payload);
+              if (apiTaskDetail && typeof apiTaskDetail === 'object') {
+                const converted = convertApiTaskToTask(apiTaskDetail);
+                if (converted?.due_date) {
+                  return { ...t, due_date: converted.due_date };
+                }
+              } else {
+                console.warn('Enrich: unexpected detail payload shape for task', t.id, payload);
+              }
+            } catch (e) {
+              console.warn('Enrich task failed:', t.id, e);
+            }
+            return t;
+          }));
+          tasks = enriched;
+        } catch (e) {
+          console.warn('Tasks enrichment pass failed:', e);
+        }
+        try {
+          const sampleConv = (tasks || []).slice(0, 5).map((t: any) => ({ id: t?.id, title: t?.title, due_date: t?.due_date, assignee_id: t?.assignee_id }));
+          console.log('[AppContext] Converted tasks sample:', sampleConv);
+        } catch {}
         dispatch({ type: "SET_TASKS", payload: tasks });
       }
     } catch (error) {

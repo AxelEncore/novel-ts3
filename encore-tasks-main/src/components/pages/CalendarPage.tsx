@@ -142,10 +142,47 @@ export function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState<"month" | "week">("month");
   const [selectedUser, setSelectedUser] = useState<string>(state.currentUser?.id || "");
+  // Keep selected user in sync with current user
+  React.useEffect(() => {
+    const uid = state.currentUser?.id || '';
+    setSelectedUser((prev) => (prev === '' ? uid : prev));
+  }, [state.currentUser?.id]);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
 
   const today = new Date();
+  // Debug: log tasks and filter summary once per month change
+  React.useEffect(() => {
+    try {
+      const sample = (state.tasks || []).slice(0, 5).map((t: any) => ({
+        id: t.id,
+        title: t.title,
+        keys: Object.keys(t || {}),
+        due_date: t?.due_date,
+        deadline: t?.deadline,
+        dueDate: (t as any)?.dueDate,
+        created_at: t?.created_at,
+        createdAt: (t as any)?.createdAt,
+        assignee_id: t?.assignee_id,
+        assignees_len: Array.isArray(t?.assignees) ? t.assignees.length : 0
+      }));
+      console.log('[CalendarPage] Debug sample tasks:', sample);
+      console.log('[CalendarPage] Selected user:', selectedUser);
+      const curMonth = currentDate.getMonth();
+      const curYear = currentDate.getFullYear();
+      const monthKey = `${curYear}-${curMonth + 1}`;
+      const counts: Record<string, number> = {};
+      (state.tasks || []).forEach((t: any) => {
+        const raw = t?.due_date ?? t?.deadline ?? t?.dueDate ?? t?.created_at ?? t?.createdAt;
+        if (!raw) return;
+        const d = typeof raw === 'string' ? new Date(raw.slice(0,10) + 'T00:00:00') : new Date(raw);
+        if (isNaN(d.getTime())) return;
+        const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        counts[key] = (counts[key] || 0) + 1;
+      });
+      console.log('[CalendarPage] Tasks per day in month', monthKey, counts);
+    } catch {}
+  }, [state.tasks, currentDate, selectedUser]);
   const currentMonth = currentDate.getMonth();
   const currentYear = currentDate.getFullYear();
 
@@ -202,15 +239,87 @@ export function CalendarPage() {
     });
   };
 
+  // Normalize a date or date-string to a YYYY-MM-DD key
+  const toDayKey = (d: Date): string => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+  const normalizeToDayKey = (raw: any): string | null => {
+    if (!raw) return null;
+    if (raw instanceof Date) return toDayKey(raw);
+    if (typeof raw === 'number') {
+      const ms = raw < 1e12 ? raw * 1000 : raw; // seconds vs ms
+      const d = new Date(ms);
+      return isNaN(d.getTime()) ? null : toDayKey(d);
+    }
+    if (typeof raw === 'string') {
+      const s = raw.trim();
+      // ISO-like YYYY-MM-DD...
+      if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+      // Locale dd.MM.yyyy[, HH:mm:ss]
+      const m = s.match(/^(\d{2})\.(\d{2})\.(\d{4})/);
+      if (m) {
+        const dd = m[1], mm = m[2], yyyy = m[3];
+        return `${yyyy}-${mm}-${dd}`;
+      }
+      // Fallback to Date parsing
+      const d = new Date(s);
+      if (!isNaN(d.getTime())) return toDayKey(d);
+      return null;
+    }
+    const d = new Date(raw);
+    return isNaN(d.getTime()) ? null : toDayKey(d);
+  };
+  // Heuristic to extract a date-like value from a task when common fields are empty
+  const extractRawDate = (task: any): any => {
+    // Only consider explicit deadline/due-like fields, never created_at
+    const candidates = [task?.due_date, task?.deadline, task?.dueDate];
+    const first = candidates.find((v) => !!v);
+    if (first) return first;
+    // Scan shallow fields for deadline/due-like keys
+    try {
+      const keyMatches = (key: string) => /(dead|due|end)/i.test(key) && !/created/i.test(key);
+      for (const [k, v] of Object.entries(task || {})) {
+        if (!v) continue;
+        if (keyMatches(k) && (typeof v === 'string' || typeof v === 'number' || v instanceof Date)) {
+          const candidate = normalizeToDayKey(v);
+          if (candidate) return v;
+        }
+        if (typeof v === 'object' && !Array.isArray(v)) {
+          for (const [kk, vv] of Object.entries(v || {})) {
+            if (!vv) continue;
+            if (keyMatches(kk) && (typeof vv === 'string' || typeof vv === 'number' || vv instanceof Date)) {
+              const candidate = normalizeToDayKey(vv);
+              if (candidate) return vv;
+            }
+          }
+        }
+      }
+    } catch {}
+    return null;
+  };
   const getTasksForDate = (date: Date) => {
-    return state.tasks.filter((task) => {
-      if (!task.due_date) return false;
-      const taskDate = new Date(task.due_date);
-      const taskAssignees = task.assignees || [];
-      return (
-        taskDate.toDateString() === date.toDateString() && (
-        !selectedUser || taskAssignees.some(a => a.id === selectedUser))
-      );
+    const dayKey = toDayKey(date);
+    const idMatches = (a: any, uid: string) => {
+      if (!a) return false;
+      if (typeof a === 'string') return a === uid;
+      return (a.id || a.userId || a.user_id) === uid;
+    };
+    return state.tasks.filter((task: any) => {
+      const rawPrimary = task?.due_date ?? task?.deadline ?? task?.dueDate;
+      const raw = rawPrimary ?? extractRawDate(task);
+      const taskKey = normalizeToDayKey(raw);
+      if (!taskKey) return false;
+      const taskAssignees = (task.assignees && task.assignees.length > 0)
+        ? task.assignees
+        : (task.assignee ? [task.assignee] : []);
+      const singleAssigneeId = task.assignee_id || task.assigneeId || task.assigned_to || task.assignedTo;
+      const assignedToSelected = !selectedUser ||
+        taskAssignees.some((a: any) => idMatches(a, selectedUser)) ||
+        (singleAssigneeId ? String(singleAssigneeId) === String(selectedUser) : false);
+      return taskKey === dayKey && assignedToSelected;
     });
   };
 
@@ -232,20 +341,39 @@ export function CalendarPage() {
   const weekDays = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
 
   const upcomingTasks = state.tasks
-  .filter((task) => {
-    if (!task.due_date) return false;
-    const days = getDaysUntilDeadline(new Date(task.due_date));
-    const taskAssignees = task.assignees || [];
+  .filter((task: any) => {
+    const rawPrimary = task?.due_date ?? task?.deadline ?? task?.dueDate;
+    const raw = rawPrimary ?? extractRawDate(task);
+    const key = normalizeToDayKey(raw);
+    if (!key) return false;
+    const parsed = new Date(key + 'T00:00:00');
+    const days = getDaysUntilDeadline(parsed);
+    const taskAssignees = (task.assignees && task.assignees.length > 0)
+      ? task.assignees
+      : (task.assignee ? [task.assignee] : []);
+    const idMatches = (a: any, uid: string) => {
+      if (!a) return false;
+      if (typeof a === 'string') return a === uid;
+      return (a.id || a.userId || a.user_id) === uid;
+    };
+    const singleAssigneeId = task.assignee_id || task.assigneeId || task.assigned_to || task.assignedTo;
+    const assignedToSelected = !selectedUser ||
+      taskAssignees.some((a: any) => idMatches(a, selectedUser)) ||
+      (singleAssigneeId ? String(singleAssigneeId) === String(selectedUser) : false);
     return (
       days >= 0 &&
       days <= 7 &&
-      task.status !== "done" && (
-      !selectedUser || taskAssignees.some(a => a.id === selectedUser))
+      task.status !== "done" &&
+      assignedToSelected
     );
   })
-  .sort((a, b) => {
-    if (!a.due_date || !b.due_date) return 0;
-    return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
+  .sort((a: any, b: any) => {
+    const aRaw: any = a?.due_date ?? a?.deadline ?? a?.dueDate ?? a?.created_at ?? a?.createdAt;
+    const bRaw: any = b?.due_date ?? b?.deadline ?? b?.dueDate ?? b?.created_at ?? b?.createdAt;
+    const aKey = normalizeToDayKey(aRaw);
+    const bKey = normalizeToDayKey(bRaw);
+    if (!aKey || !bKey) return 0;
+    return new Date(aKey + 'T00:00:00').getTime() - new Date(bKey + 'T00:00:00').getTime();
   });
 
   const handleDayClick = (date: Date) => {
