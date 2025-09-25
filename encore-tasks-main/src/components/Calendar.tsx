@@ -126,6 +126,8 @@ export function Calendar({ onTaskClick }: CalendarProps) {
       const raw = rawPrimary ?? extractRawDate(task);
       const taskKey = normalizeToDayKey(raw);
       if (!taskKey) return false;
+      const isArchived = (task as any)?.isArchived || (task as any)?.is_archived || false;
+      if (task?.status === 'done' || isArchived) return false;
       return taskKey === dayKey;
     }).sort((a: any, b: any) => {
       // Sort to show current user's tasks first (tolerate different id shapes)

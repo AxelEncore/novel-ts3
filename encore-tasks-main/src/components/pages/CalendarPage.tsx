@@ -315,7 +315,9 @@ export function CalendarPage() {
       const assignedToSelected = !selectedUser ||
         taskAssignees.some((a: any) => idMatches(a, selectedUser)) ||
         (singleAssigneeId ? String(singleAssigneeId) === String(selectedUser) : false);
-      return taskKey === dayKey && assignedToSelected;
+      const isArchived = (task as any)?.isArchived || (task as any)?.is_archived || false;
+      const notDone = task?.status !== 'done';
+      return taskKey === dayKey && assignedToSelected && notDone && !isArchived;
     });
   };
 

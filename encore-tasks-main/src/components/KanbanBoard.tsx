@@ -424,7 +424,13 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ ...updateData, position: Date.now(), ...(toggleTo === 'done' ? { completedAt: new Date().toISOString() } : {}) })
+        body: JSON.stringify({
+          ...updateData,
+          position: Date.now(),
+          ...(toggleTo === 'done'
+            ? { completedAt: new Date().toISOString() }
+            : { isArchived: false, archivedAt: null })
+        })
       });
 
       if (!response.ok) {
@@ -461,6 +467,19 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
       })();
 
       setColumns(nextColumns as any);
+
+      // Optimistically unarchive in global state if we toggled OUT of done
+      if (toggleTo !== 'done') {
+        try {
+          const existing: any = (state.tasks || []).find((t: any) => String(t.id) === String(task.id));
+          if (existing) {
+            const optimistic = { ...existing, status: toggleTo, isArchived: false, is_archived: false, updated_at: new Date().toISOString() } as any;
+            dispatch({ type: 'UPDATE_TASK', payload: optimistic } as any);
+          }
+          // Remove from archive list if present
+          dispatch({ type: 'UNARCHIVE_TASK', payload: String(task.id) } as any);
+        } catch {}
+      }
 
       if (Array.isArray(toArchive) && toArchive.length > 0) {
         for (const t of toArchive) {
@@ -584,7 +603,13 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
               'Content-Type': 'application/json',
             },
             credentials: 'include',
-            body: JSON.stringify({ ...updateData, position: Date.now(), ...(newStatus === 'done' ? { completedAt: new Date().toISOString() } : {}) })
+            body: JSON.stringify({
+              ...updateData,
+              position: Date.now(),
+              ...(newStatus === 'done'
+                ? { completedAt: new Date().toISOString() }
+                : { isArchived: false, archivedAt: null })
+            })
           });
           
           if (!response.ok) {
@@ -624,6 +649,19 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
           })();
 
           setColumns(nextColumns as any);
+
+          // Optimistically unarchive if moving OUT of done
+          if (newStatus !== 'done' && String(draggedTask.status).toLowerCase() === 'done') {
+            try {
+              const existing: any = (state.tasks || []).find((t: any) => String(t.id) === String(draggedTask.id));
+              if (existing) {
+                const optimistic = { ...existing, status: newStatus, isArchived: false, is_archived: false, updated_at: new Date().toISOString() } as any;
+                dispatch({ type: 'UPDATE_TASK', payload: optimistic } as any);
+              }
+              dispatch({ type: 'UNARCHIVE_TASK', payload: String(draggedTask.id) } as any);
+            } catch {}
+          }
+
           if (Array.isArray(toArchive) && toArchive.length > 0) {
             for (const t of toArchive) {
               const bid = (t as any).board_id || (t as any).boardId || board.id;
