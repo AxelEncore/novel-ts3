@@ -388,7 +388,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify(updateData)
+        body: JSON.stringify({ ...updateData, position: Date.now() })
       });
 
       if (!response.ok) {
@@ -500,13 +500,14 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
             status: newStatus
           };
           
+          // Новая позиция = текущее время (мс), чтобы задача стала наверху целевой колонки
           const response = await fetch(`/api/tasks/${draggedTask.id}`, {
             method: 'PATCH',
             headers: {
               'Content-Type': 'application/json',
             },
             credentials: 'include',
-            body: JSON.stringify(updateData)
+            body: JSON.stringify({ ...updateData, position: Date.now() })
           });
           
           if (!response.ok) {
@@ -641,11 +642,19 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
               return true; // Fail-open to avoid hard crashes
             }
           });
+
+          // Порядок карточек: по моменту добавления в колонку (position как временная метка)
+          const getPos = (t: any) => {
+            const p = Number(t?.position ?? 0);
+            return Number.isFinite(p) ? p : 0;
+          };
+          const sortedByPositionDesc = [...columnTasks].sort((a, b) => getPos(b) - getPos(a));
+
           return (
               <KanbanColumnDark
               key={column.id}
               column={column}
-              tasks={columnTasks}
+              tasks={sortedByPositionDesc}
               users={projectMembers.length > 0 ? projectMembers : state.users}
               onTaskCreate={() => handleCreateTask(column)}
               onTaskUpdate={handleTaskUpdated}

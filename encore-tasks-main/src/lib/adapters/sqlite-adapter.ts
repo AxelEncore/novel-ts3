@@ -655,7 +655,8 @@ export class SQLiteAdapter {
   }
 
   async getColumnTasks(columnId: string): Promise<any[]> {
-    const query = 'SELECT * FROM tasks WHERE column_id = ? ORDER BY position ASC';
+    // Новее выше: сортируем по position по убыванию
+    const query = 'SELECT * FROM tasks WHERE column_id = ? ORDER BY position DESC';
     const result = await this.executeRawQuery(query, [columnId]);
     
     return result.rows.map((task: any) => ({
