@@ -37,7 +37,7 @@ const statusColors: Record<string, string> = {
 };
 
 const priorityIcons: Record<TaskPriority, React.ReactNode> = {
-  low: <CheckCircle2 className="w-4 h-4 text-green-400 drop-shadow-sm" data-oid="hklu-g4" />,
+  low: <CheckCircle2 className="w-4 h-4 text-blue-400 drop-shadow-sm" data-oid="hklu-g4" />,
   medium: <Clock className="w-4 h-4 text-yellow-400 drop-shadow-sm" data-oid="rnv5m:0" />,
   high: <AlertTriangle className="w-4 h-4 text-orange-400 drop-shadow-sm" data-oid="0r:wuf:" />,
   urgent: <AlertTriangle className="w-4 h-4 text-red-400 drop-shadow-sm animate-pulse" data-oid="ke7azx6" />

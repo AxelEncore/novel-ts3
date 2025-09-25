@@ -28,7 +28,7 @@ interface TaskModalProps {
 
 const priorityOptions: {value: TaskPriority;label: string;color: string;}[] =
 [
-{ value: "low", label: "Низкий", color: "text-green-500" },
+{ value: "low", label: "Низкий", color: "text-blue-500" },
 { value: "medium", label: "Средний", color: "text-yellow-500" },
 { value: "high", label: "Высокий", color: "text-orange-500" },
 { value: "urgent", label: "Срочный", color: "text-red-500" }];

@@ -285,10 +285,10 @@ export function Calendar({ onTaskClick }: CalendarProps) {
                 <div className="space-y-1" data-oid="rxftoi4">
                   {tasks.slice(0, 3).map((task) => {
                     const priorityColors = {
-                      low: "bg-primary-200/20 text-primary-300",
-                      medium: "bg-primary-400/20 text-primary-300",
-                      high: "bg-primary-500/20 text-primary-300",
-                      urgent: "bg-primary-700/20 text-primary-300"
+                      low: "bg-blue-500/20 text-blue-300",
+                      medium: "bg-yellow-400/20 text-yellow-300",
+                      high: "bg-orange-500/20 text-orange-300",
+                      urgent: "bg-red-600/20 text-red-300"
                     };
 
                     return (

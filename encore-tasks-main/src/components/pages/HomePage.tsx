@@ -39,8 +39,8 @@ export function HomePage({ onNavigate }: HomePageProps) {
           projects.map(async (project) => {
             try {
               const ts = Date.now();
-              const totalUrl = `/api/tasks?projectId=${project.id}&assigneeId=${userId}&limit=1&ts=${ts}`;
-              const doneUrl = `/api/tasks?projectId=${project.id}&assigneeId=${userId}&status=done&limit=1&ts=${ts}`;
+              const totalUrl = `/api/tasks?project_id=${project.id}&assignee_id=${userId}&limit=1&ts=${ts}`;
+              const doneUrl = `/api/tasks?project_id=${project.id}&assignee_id=${userId}&status=done&limit=1&ts=${ts}`;
               const [totalRes, doneRes] = await Promise.all([
                 fetch(totalUrl, { credentials: 'include', cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } }),
                 fetch(doneUrl, { credentials: 'include', cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } }),

@@ -268,7 +268,15 @@ const convertApiTaskToTask = (apiTask: any): Task => {
     }
     if (typeof val === 'string') {
       const s = val.trim();
-      if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+      if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+        // Handle both YYYY-MM-DD and YYYY-MM-DD HH:mm:ss
+        if (s.length >= 19 && s[10] === ' ') {
+          const iso = s.replace(' ', 'T');
+          const d0 = new Date(iso);
+          if (!isNaN(d0.getTime())) return d0.toISOString().slice(0, 10);
+        }
+        return s.slice(0, 10);
+      }
       const m = s.match(/^(\d{2})\.(\d{2})\.(\d{4})/);
       if (m) {
         const dd = m[1], mm = m[2], yyyy = m[3];
@@ -861,7 +869,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const loadTasks = useCallback(async (params: { projectId: string; boardId: string }): Promise<void> => {
     try {
-      const response = await api.getTasks(params);
+      // Always request a generous page size and exclude archived tasks by default
+      const response = await api.getTasks({
+        projectId: params.projectId,
+        boardId: '',
+        columnId: '',
+        assigneeId: '',
+        status: '',
+        priority: '',
+        includeArchived: false,
+        sortBy: 'created_at',
+        sortOrder: 'desc',
+        page: 1,
+        limit: 10000,
+      } as any);
       
       if (response.error) {
         console.error('Load tasks error:', response.error);
@@ -923,11 +944,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
         } catch (e) {
           console.warn('Tasks enrichment pass failed:', e);
         }
+        // Deduplicate by id and ensure tasks belong to the requested project
+        const seen = new Set<string>();
+        const filtered = tasks.filter((t: any) => {
+          const pid = (t as any).project_id || (t as any).projectId;
+          if (pid && String(pid) !== String(params.projectId)) return false;
+          const id = String((t as any).id || '');
+          if (!id || seen.has(id)) return false;
+          seen.add(id);
+          return true;
+        });
         try {
-          const sampleConv = (tasks || []).slice(0, 5).map((t: any) => ({ id: t?.id, title: t?.title, due_date: t?.due_date, assignee_id: t?.assignee_id }));
+          const sampleConv = (filtered || []).slice(0, 5).map((t: any) => ({ id: t?.id, title: t?.title, due_date: t?.due_date, assignee_id: t?.assignee_id }));
           console.log('[AppContext] Converted tasks sample:', sampleConv);
         } catch {}
-        dispatch({ type: "SET_TASKS", payload: tasks });
+        dispatch({ type: "SET_TASKS", payload: filtered });
       }
     } catch (error) {
       console.error('Failed to load tasks:', error);

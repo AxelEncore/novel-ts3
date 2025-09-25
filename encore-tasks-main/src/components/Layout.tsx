@@ -93,8 +93,17 @@ export function Layout({ children }: LayoutProps) {
     } catch {}
   }, [currentPage]);
 
-  // Get the current active project (needs to be calculated before useEffect)
-  const currentProject = state.selectedProject || (state.projects.length > 0 ? state.projects[0] : undefined);
+  // Get the current active project (deterministic):
+  // - Prefer explicitly selected project from state
+  // - Else prefer last saved project from localStorage (if present in loaded list)
+  // - Do NOT fallback to the first project to avoid flashing wrong data on first render
+  let savedProjectId: string | null = null;
+  try {
+    if (typeof window !== 'undefined') {
+      savedProjectId = localStorage.getItem('encore-last-project-id');
+    }
+  } catch {}
+  const currentProject = state.selectedProject || (savedProjectId ? state.projects.find(p => p.id === savedProjectId) : undefined);
 
   // Auto-load boards when current project changes (skip for unapproved users)
   useEffect(() => {

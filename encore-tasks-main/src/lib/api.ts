@@ -465,11 +465,24 @@ class ApiClient {
     limit: number;
   }) {
     const searchParams = new URLSearchParams();
-    if (params?.columnId) searchParams.set('columnId', params.columnId);
-    if (params?.projectId) searchParams.set('projectId', params.projectId);
-    if (params?.boardId) searchParams.set('boardId', params.boardId);
+    // Send both camelCase and snake_case for maximum backend compatibility
+    if (params?.columnId) {
+      searchParams.set('columnId', params.columnId);
+      searchParams.set('column_id', params.columnId);
+    }
+    if (params?.projectId) {
+      searchParams.set('projectId', params.projectId);
+      searchParams.set('project_id', params.projectId);
+    }
+    if (params?.boardId) {
+      searchParams.set('boardId', params.boardId);
+      searchParams.set('board_id', params.boardId);
+    }
     if (params?.status) searchParams.set('status', params.status);
-    if (params?.assigneeId) searchParams.set('assigneeId', params.assigneeId);
+    if (params?.assigneeId) {
+      searchParams.set('assigneeId', params.assigneeId);
+      searchParams.set('assignee_id', params.assigneeId);
+    }
     if (params?.priority) searchParams.set('priority', params.priority);
     if (params?.includeArchived) searchParams.set('includeArchived', 'true');
     if (params?.sortBy) searchParams.set('sortBy', params.sortBy);

@@ -141,12 +141,8 @@ export function CalendarPage() {
   const { state, dispatch } = useApp();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState<"month" | "week">("month");
-  const [selectedUser, setSelectedUser] = useState<string>(state.currentUser?.id || "");
-  // Keep selected user in sync with current user
-  React.useEffect(() => {
-    const uid = state.currentUser?.id || '';
-    setSelectedUser((prev) => (prev === '' ? uid : prev));
-  }, [state.currentUser?.id]);
+  // Default to "all users" to avoid race conditions on auth init
+  const [selectedUser, setSelectedUser] = useState<string>("");
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
 
@@ -342,6 +338,9 @@ export function CalendarPage() {
 
   const upcomingTasks = state.tasks
   .filter((task: any) => {
+    // Exclude archived and done tasks
+    const isArchived = (task as any)?.isArchived || (task as any)?.is_archived || false;
+    if (task?.status === 'done' || isArchived) return false;
     const rawPrimary = task?.due_date ?? task?.deadline ?? task?.dueDate;
     const raw = rawPrimary ?? extractRawDate(task);
     const key = normalizeToDayKey(raw);
@@ -542,12 +541,12 @@ export function CalendarPage() {
                         key={task.id}
                         className={`text-xs p-1 rounded truncate cursor-pointer hover:scale-105 transition-transform ${
                         task.priority === "urgent" ?
-                        "bg-primary-700/20 text-primary-300" :
+                        "bg-red-600/20 text-red-300" :
                         task.priority === "high" ?
-                        "bg-primary-600/20 text-primary-300" :
+                        "bg-orange-500/20 text-orange-300" :
                         task.priority === "medium" ?
-                        "bg-primary-500/20 text-primary-300" :
-                        "bg-primary-400/20 text-primary-300"}`
+                        "bg-yellow-400/20 text-yellow-300" :
+                        "bg-blue-500/20 text-blue-300"}`
                         }
                         title={task.title}
                         onClick={(e) => {
@@ -598,17 +597,17 @@ export function CalendarPage() {
                 data-oid="r2e:4h:">
 
                   <div className="flex items-start gap-2" data-oid="8zzim3-">
-                    <div
-                    className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${
-                    task.priority === "urgent" ?
-                    "bg-primary-700" :
-                    task.priority === "high" ?
-                    "bg-primary-600" :
-                    task.priority === "medium" ?
-                    "bg-primary-500" :
-                    "bg-primary-400"}`
-                    }
-                    data-oid="e:4j:y-" />
+                      <div
+                      className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${
+                      task.priority === "urgent" ?
+                      "bg-red-600" :
+                      task.priority === "high" ?
+                      "bg-orange-500" :
+                      task.priority === "medium" ?
+                      "bg-yellow-400" :
+                      "bg-blue-500"}`
+                      }
+                      data-oid="e:4j:y-" />
 
                     <div className="flex-1 min-w-0" data-oid="xjh443m">
                       <p
