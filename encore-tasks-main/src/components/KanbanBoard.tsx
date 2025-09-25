@@ -393,11 +393,38 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
       const updateData: any = { status: toggleTo };
       if (targetColumnId) updateData.columnId = targetColumnId;
 
+      // Time tracking: update local aggregated spent time across cycles
+      if (typeof window !== 'undefined') {
+        try {
+          const now = Date.now();
+          const storageSpentKey = 'encore-time-spent';
+          const storageStartKey = 'encore-active-start';
+          const spentMap = JSON.parse(localStorage.getItem(storageSpentKey) || '{}');
+          const startMap = JSON.parse(localStorage.getItem(storageStartKey) || '{}');
+          const tid = String(task.id);
+          const createdAtMs = new Date((task as any).created_at || (task as any).createdAt || new Date()).getTime();
+          const currentStart = Number(startMap[tid]) || createdAtMs;
+
+          if (toggleTo === 'done') {
+            const prev = Number(spentMap[tid]) || 0;
+            const delta = Math.max(0, now - currentStart);
+            spentMap[tid] = prev + delta;
+            delete startMap[tid]; // stop active timer
+          } else {
+            // resume work
+            startMap[tid] = now;
+          }
+
+          localStorage.setItem(storageSpentKey, JSON.stringify(spentMap));
+          localStorage.setItem(storageStartKey, JSON.stringify(startMap));
+        } catch {}
+      }
+
       const response = await fetch(`/api/tasks/${task.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ ...updateData, position: Date.now() })
+        body: JSON.stringify({ ...updateData, position: Date.now(), ...(toggleTo === 'done' ? { completedAt: new Date().toISOString() } : {}) })
       });
 
       if (!response.ok) {
@@ -439,8 +466,19 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
         for (const t of toArchive) {
           const bid = (t as any).board_id || (t as any).boardId || board.id;
           const archivedAt = new Date();
-          dispatch({ type: 'ARCHIVE_TASK', payload: { task: { ...t, board_id: bid, boardId: bid }, archivedAt, archivedBy: state.currentUser?.id } as any } as any);
-          // Persist on server
+
+          // Attach time spent from localStorage if available
+          let timeSpentMs: number | undefined = undefined;
+          if (typeof window !== 'undefined') {
+            try {
+              const spentMap = JSON.parse(localStorage.getItem('encore-time-spent') || '{}');
+              const tid = String((t as any).id);
+              if (typeof spentMap[tid] === 'number') timeSpentMs = spentMap[tid];
+            } catch {}
+          }
+
+          dispatch({ type: 'ARCHIVE_TASK', payload: { task: { ...t, board_id: bid, boardId: bid, timeSpentMs }, archivedAt, archivedBy: state.currentUser?.id } as any } as any);
+          // Persist on server (best-effort, sqlite ignores archive flags)
           try {
             await fetch(`/api/tasks/${t.id}`, {
               method: 'PATCH',
@@ -511,6 +549,33 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
             columnId: targetColumnId,
             status: newStatus
           };
+
+          // Time tracking for drag-and-drop status change
+          if (typeof window !== 'undefined') {
+            try {
+              const now = Date.now();
+              const storageSpentKey = 'encore-time-spent';
+              const storageStartKey = 'encore-active-start';
+              const spentMap = JSON.parse(localStorage.getItem(storageSpentKey) || '{}');
+              const startMap = JSON.parse(localStorage.getItem(storageStartKey) || '{}');
+              const tid = String(draggedTask.id);
+              const createdAtMs = new Date((draggedTask as any).created_at || (draggedTask as any).createdAt || new Date()).getTime();
+              const currentStart = Number(startMap[tid]) || createdAtMs;
+
+              // If moving into done => accumulate; if moving out of done => start timer
+              if (newStatus === 'done' && String(draggedTask.status).toLowerCase() !== 'done') {
+                const prev = Number(spentMap[tid]) || 0;
+                const delta = Math.max(0, now - currentStart);
+                spentMap[tid] = prev + delta;
+                delete startMap[tid];
+              } else if (newStatus !== 'done' && String(draggedTask.status).toLowerCase() === 'done') {
+                startMap[tid] = now;
+              }
+
+              localStorage.setItem(storageSpentKey, JSON.stringify(spentMap));
+              localStorage.setItem(storageStartKey, JSON.stringify(startMap));
+            } catch {}
+          }
           
           // Новая позиция = текущее время (мс), чтобы задача стала наверху целевой колонки
           const response = await fetch(`/api/tasks/${draggedTask.id}`, {
@@ -519,7 +584,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
               'Content-Type': 'application/json',
             },
             credentials: 'include',
-            body: JSON.stringify({ ...updateData, position: Date.now() })
+            body: JSON.stringify({ ...updateData, position: Date.now(), ...(newStatus === 'done' ? { completedAt: new Date().toISOString() } : {}) })
           });
           
           if (!response.ok) {
@@ -563,7 +628,18 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
             for (const t of toArchive) {
               const bid = (t as any).board_id || (t as any).boardId || board.id;
               const archivedAt = new Date();
-              dispatch({ type: 'ARCHIVE_TASK', payload: { task: { ...t, board_id: bid, boardId: bid }, archivedAt, archivedBy: state.currentUser?.id } as any } as any);
+
+              // Attach time spent from localStorage if available
+              let timeSpentMs: number | undefined = undefined;
+              if (typeof window !== 'undefined') {
+                try {
+                  const spentMap = JSON.parse(localStorage.getItem('encore-time-spent') || '{}');
+                  const tid = String((t as any).id);
+                  if (typeof spentMap[tid] === 'number') timeSpentMs = spentMap[tid];
+                } catch {}
+              }
+
+              dispatch({ type: 'ARCHIVE_TASK', payload: { task: { ...t, board_id: bid, boardId: bid, timeSpentMs }, archivedAt, archivedBy: state.currentUser?.id } as any } as any);
               // Persist on server
               try {
                 await fetch(`/api/tasks/${t.id}`, {
