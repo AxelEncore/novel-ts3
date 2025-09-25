@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { api } from "@/lib/api";
 import { Eye, EyeOff, LogIn, UserPlus } from "lucide-react";
+import { toast } from "sonner";
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -68,6 +69,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
         const message = probe.error || "Неверный email или пароль";
         setErrors({ email: message });
         setServerError(message);
+        try { toast.error(message); } catch {}
         return;
       }
     } else {
@@ -81,6 +83,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
         }
         setErrors({ email: message });
         setServerError(message);
+        try { toast.error(message); } catch {}
         return;
       }
       

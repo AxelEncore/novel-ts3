@@ -13,6 +13,14 @@ interface AdminPanelProps {
 export function AdminPanel({ onNavigate }: AdminPanelProps) {
   const { state, dispatch, updateUser, deleteUser } = useApp();
   const [selectedTab, setSelectedTab] = useState<'pending' | 'approved'>('pending');
+
+  const getCSRFToken = () => {
+    try {
+      const cookies = typeof document !== 'undefined' ? document.cookie.split(';') : [];
+      const csrfCookie = cookies.find(c => c.trim().startsWith('csrf-token='));
+      return csrfCookie ? csrfCookie.split('=')[1] : '';
+    } catch { return ''; }
+  };
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const [deleteAction, setDeleteAction] = useState<'reject' | 'remove'>('reject');
@@ -34,15 +42,18 @@ export function AdminPanel({ onNavigate }: AdminPanelProps) {
       
       try {
         for (const project of state.projects) {
-          const response = await fetch(`/api/projects/${project.id}/members`);
+          const response = await fetch(`/api/projects/${project.id}/members`, { credentials: 'include' });
           if (response.ok) {
             const data = await response.json();
             if (data.members) {
               data.members.forEach((member: any) => {
-                if (!projectsMap[member.user_id]) {
-                  projectsMap[member.user_id] = [];
+                // API может возвращать user_id, id или userId — нормализуем
+                const uid = String(member.user_id || member.id || member.userId || "");
+                if (!uid) return;
+                if (!projectsMap[uid]) {
+                  projectsMap[uid] = [];
                 }
-                projectsMap[member.user_id].push(project.id);
+                projectsMap[uid].push(project.id);
               });
             }
           }
@@ -143,7 +154,10 @@ export function AdminPanel({ onNavigate }: AdminPanelProps) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'X-CSRF-Token': getCSRFToken(),
+          'X-Requested-With': 'XMLHttpRequest',
         },
+        credentials: 'include',
         body: JSON.stringify({ user_id: userId, role: 'member' }),
       });
       
@@ -167,6 +181,11 @@ export function AdminPanel({ onNavigate }: AdminPanelProps) {
     try {
       const response = await fetch(`/api/projects/${projectId}/members/${userId}`, {
         method: 'DELETE',
+        headers: {
+          'X-CSRF-Token': getCSRFToken(),
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        credentials: 'include',
       });
       
       if (response.ok) {
