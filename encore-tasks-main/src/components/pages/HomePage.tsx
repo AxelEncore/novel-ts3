@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { formatDate, getDaysUntilDeadline } from "@/lib/utils";
 import {
@@ -22,6 +22,66 @@ export function HomePage({ onNavigate }: HomePageProps) {
   const { state, dispatch } = useApp();
 
   const today = new Date();
+
+  // Local cache of per-project progress for the current user (assigned tasks)
+  const [projectProgress, setProjectProgress] = useState<Record<string, { total: number; done: number }>>({});
+
+  useEffect(() => {
+    const userId = state.currentUser?.id;
+    const projects = state.projects || [];
+    if (!userId || projects.length === 0) return;
+
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        const results = await Promise.all(
+          projects.map(async (project) => {
+            try {
+              const ts = Date.now();
+              const totalUrl = `/api/tasks?projectId=${project.id}&assigneeId=${userId}&limit=1&ts=${ts}`;
+              const doneUrl = `/api/tasks?projectId=${project.id}&assigneeId=${userId}&status=done&limit=1&ts=${ts}`;
+              const [totalRes, doneRes] = await Promise.all([
+                fetch(totalUrl, { credentials: 'include', cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } }),
+                fetch(doneUrl, { credentials: 'include', cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } }),
+              ]);
+              let total = 0;
+              let done = 0;
+              if (totalRes.ok) {
+                const totalJson = await totalRes.json().catch(() => null);
+                total = Number(totalJson?.data?.pagination?.total ?? 0);
+              }
+              if (doneRes.ok) {
+                const doneJson = await doneRes.json().catch(() => null);
+                done = Number(doneJson?.data?.pagination?.total ?? 0);
+              }
+              return { projectId: project.id, total, done };
+            } catch {
+              return { projectId: project.id, total: 0, done: 0 };
+            }
+          })
+        );
+        if (cancelled) return;
+        setProjectProgress(Object.fromEntries(results.map(r => [r.projectId, { total: r.total, done: r.done }])));
+      } catch {
+        if (cancelled) return;
+        setProjectProgress({});
+      }
+    };
+
+    load();
+
+    const onTasksUpdated = () => load();
+    if (typeof window !== 'undefined') {
+      window.addEventListener('tasks-updated', onTasksUpdated as any);
+    }
+    return () => {
+      cancelled = true;
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('tasks-updated', onTasksUpdated as any);
+      }
+    };
+  }, [state.currentUser?.id, state.projects?.length]);
   
   // Помощники
   const isAssignedToMe = (task: any) => task.assignees?.some((a: any) => a.id === state.currentUser?.id) || false;
@@ -314,16 +374,11 @@ export function HomePage({ onNavigate }: HomePageProps) {
           data-oid="st7l0fg">
 
           {state.projects.map((project) => {
-            const projectTasks = state.tasks.filter(
-              (t) => t.project_id === project.id
-            );
-            const completedCount = projectTasks.filter(
-              (t) => t.status === "done"
-            ).length;
-            const progress =
-            projectTasks.length > 0 ?
-            completedCount / projectTasks.length * 100 :
-            0;
+            // Compute per-user progress using server counts (assigned total vs assigned done)
+            const pp = projectProgress[project.id];
+            const assignedTotal = pp?.total ?? 0;
+            const assignedDone = pp?.done ?? 0;
+            const progress = assignedTotal > 0 ? (assignedDone / assignedTotal) * 100 : 0;
 
             return (
               <div
@@ -377,7 +432,7 @@ export function HomePage({ onNavigate }: HomePageProps) {
                     className="flex justify-between text-xs text-gray-400"
                     data-oid="6xmnkjm">
 
-                    <span data-oid="2qw53no">{projectTasks.length} задач</span>
+                    <span data-oid="2qw53no">Мои: {assignedDone}/{assignedTotal}</span>
                     <span
                       className="flex items-center gap-1"
                       data-oid="tcatz1.">

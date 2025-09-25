@@ -126,21 +126,31 @@ export async function GET(request: NextRequest) {
     const whereConditions: string[] = ['1=1'];
     const queryParams: (string | number)[] = [];
 
-    // Фильтры
+    // Фильтры (комбинируем при наличии нескольких)
+    const hasPrimaryFilter = Boolean(columnId || boardId || projectId || assigneeId);
+
     if (columnId) {
       whereConditions.push(`t.column_id = $${queryParams.length + 1}`);
       queryParams.push(columnId);
-    } else if (boardId) {
+    }
+
+    if (boardId) {
       whereConditions.push(`(c.board_id = $${queryParams.length + 1} OR t.board_id = $${queryParams.length + 2})`);
       queryParams.push(boardId, boardId);
-    } else if (projectId) {
+    }
+
+    if (projectId) {
       whereConditions.push(`b.project_id = $${queryParams.length + 1}`);
       queryParams.push(projectId);
-    } else if (assigneeId) {
+    }
+
+    if (assigneeId) {
       // Задачи, назначенные пользователю
       whereConditions.push(`EXISTS (SELECT 1 FROM task_assignees ta WHERE ta.task_id = t.id AND ta.user_id = $${queryParams.length + 1})`);
       queryParams.push(assigneeId);
-    } else {
+    }
+
+    if (!hasPrimaryFilter) {
       // По умолчанию: задачи, где пользователь назначен ИЛИ является создателем
       whereConditions.push(`(EXISTS (SELECT 1 FROM task_assignees ta WHERE ta.task_id = t.id AND ta.user_id = $${queryParams.length + 1}) OR t.reporter_id = $${queryParams.length + 2})`);
       queryParams.push(authResult.user.userId, authResult.user.userId);
