@@ -347,27 +347,6 @@ const availableUsers = ((state.selectedProject?.members as any[]) || []).map((me
                       data-oid="esq072m" />
                   </div>
 
-                  {/* Tags */}
-                  <div data-oid="-q29zox">
-                    <label
-                      className="block text-sm font-medium text-gray-300 mb-2"
-                      data-oid="43e09wy">
-                      Теги
-                    </label>
-                    <input
-                      type="text"
-                      value={(editedTask.tags || []).join(", ") || ""}
-                      onChange={(e) => {
-                        const tags = e.target.value
-                          .split(",")
-                          .map((tag) => tag.trim())
-                          .filter(Boolean);
-                        setEditedTask({ ...editedTask, tags });
-                      }}
-                      className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
-                      placeholder="Введите теги через запятую"
-                      data-oid="wh370-5" />
-                  </div>
                 </>
               ) : (
                 <>
@@ -412,19 +391,6 @@ const availableUsers = ((state.selectedProject?.members as any[]) || []).map((me
                     <span className="text-white">{editedTask.due_date ? formatDate(new Date(editedTask.due_date)) : 'Не указан'}</span>
                   </div>
 
-                  {/* Tags view */}
-                  <div>
-                    <h3 className="block text-sm font-medium text-gray-300 mb-2">Теги</h3>
-                    {(editedTask.tags && editedTask.tags.length > 0) ? (
-                      <div className="flex flex-wrap gap-2">
-                        {editedTask.tags.map((tag) => (
-                          <span key={tag} className="px-2 py-1 rounded-full text-sm bg-white/10 text-white border border-white/10">#{tag}</span>
-                        ))}
-                      </div>
-                    ) : (
-                      <span className="text-sm text-gray-400">Нет тегов</span>
-                    )}
-                  </div>
                 </>
               )}
             </div>

@@ -16,9 +16,7 @@ const createTaskSchema = z.object({
   priority: z.enum(['low', 'medium', 'high', 'urgent']).default('medium'),
   status: z.enum(['todo', 'in_progress', 'review', 'done', 'deferred']).optional(),
   due_date: z.union([z.string(), z.date()]).optional(),
-  estimated_hours: z.number().min(0).max(1000).optional(),
   parent_task_id: z.string().optional(),
-  tags: z.array(z.string()).default([]),
   settings: z.record(z.string(), z.unknown()).optional()
 });
 
@@ -331,9 +329,7 @@ export async function POST(request: NextRequest) {
       priority: raw.priority,
       status: raw.status,
       due_date: raw.due_date || raw.dueDate,
-      estimated_hours: raw.estimated_hours || raw.estimatedHours,
       parent_task_id: raw.parent_task_id || raw.parentTaskId,
-      tags: raw.tags,
       settings: raw.settings,
     } as any;
 
@@ -464,17 +460,6 @@ statusByColumn,
         }
       }
 
-      // Добавляем теги, если указаны
-      if (taskData.tag_ids && taskData.tag_ids.length > 0) {
-        for (const tagId of taskData.tag_ids) {
-          // Связываем тег с задачей
-          await databaseAdapter.query(
-          'INSERT INTO task_tags (task_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-          [createdTaskId, tagId]
-        );
-        }
-      }
-
       // Транзакция не нужна для простых операций
 
       // Получаем полную информацию о созданной задаче
@@ -553,9 +538,8 @@ statusByColumn,
         priority: task.priority,
         status: 'todo', // default status
         due_date: task.due_date,
-        estimated_hours: task.estimated_hours,
         actual_hours: null,
-        parent_task_id: null,
+        parent_task_id: task.parent_task_id || null,
         position: task.position,
         metadata: {},
         created_at: task.created_at,
@@ -570,7 +554,6 @@ statusByColumn,
           username: row.username || row.email || row.name,
           name: row.name || row.email || row.username || 'User'
         })),
-        tags: [],
         comments_count: 0,
         attachments_count: 0,
         subtasks_count: 0

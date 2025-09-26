@@ -18,8 +18,6 @@ interface TaskFormData {
   priority: Task['priority'];
   dueDate: string;
   assigneeIds: string[];
-  tags: string[];
-  estimatedHours: number | null;
 }
 
 const PRIORITY_OPTIONS = [
@@ -43,12 +41,9 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
     priority: 'MEDIUM',
     dueDate: '',
     assigneeIds: [],
-    tags: [],
-    estimatedHours: null,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [newTag, setNewTag] = useState('');
 
   // Сброс формы при открытии/закрытии модального окна
   useEffect(() => {
@@ -59,11 +54,8 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
         priority: 'MEDIUM',
         dueDate: '',
         assigneeIds: [],
-        tags: [],
-        estimatedHours: null,
       });
       setErrors({});
-      setNewTag('');
     }
   }, [isOpen]);
 
@@ -81,10 +73,6 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
 
     if (formData.description.length > 1000) {
       newErrors.description = 'Описание не должно превышать 1000 символов';
-    }
-
-    if (formData.estimatedHours !== null && formData.estimatedHours < 0) {
-      newErrors.estimatedHours = 'Время не может быть отрицательным';
     }
 
     setErrors(newErrors);
@@ -115,8 +103,6 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
           column_id: columnId.toString(),
           assignee_ids: formData.assigneeIds,
           due_date: formData.dueDate ? new Date(formData.dueDate).toISOString() : undefined,
-          tags: formData.tags,
-          estimated_hours: formData.estimatedHours
         })
       });
 
@@ -145,21 +131,6 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
     }
-  };
-
-  // Добавление тега
-  const handleAddTag = () => {
-    const currentTags = formData.tags || [];
-    if (newTag.trim() && !currentTags.includes(newTag.trim())) {
-      handleInputChange('tags', [...currentTags, newTag.trim()]);
-      setNewTag('');
-    }
-  };
-
-  // Удаление тега
-  const handleRemoveTag = (tagToRemove: string) => {
-    const currentTags = formData.tags || [];
-    handleInputChange('tags', currentTags.filter(tag => tag !== tagToRemove));
   };
 
   // Переключение исполнителя
@@ -269,28 +240,6 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
             </div>
           </div>
 
-          {/* Оценка времени */}
-          <div>
-            <label htmlFor="estimatedHours" className="block text-sm font-medium text-gray-300 mb-2">
-              Оценка времени (часы)
-            </label>
-            <input
-              type="number"
-              id="estimatedHours"
-              value={formData.estimatedHours || ''}
-              onChange={(e) => handleInputChange('estimatedHours', e.target.value ? parseFloat(e.target.value) : null)}
-              min="0"
-              step="0.5"
-              className={`w-full px-3 py-2 bg-white/5 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-white placeholder-gray-500 ${
-                errors.estimatedHours ? 'border-red-400' : 'border-white/10'
-              }`}
-              placeholder="Введите количество часов"
-            />
-            {errors.estimatedHours && (
-              <p className="mt-1 text-sm text-red-400">{errors.estimatedHours}</p>
-            )}
-          </div>
-
           {/* Исполнители */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -322,47 +271,6 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                   </label>
                 ))
               )}
-            </div>
-          </div>
-
-          {/* Теги */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Теги
-            </label>
-            <div className="flex flex-wrap gap-2 mb-2">
-              {(formData.tags || []).map(tag => (
-                <span
-                  key={tag}
-                  className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-primary-500/20 text-primary-400"
-                >
-                  {tag}
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveTag(tag)}
-                    className="ml-1 text-primary-300 hover:text-primary-200"
-                  >
-                    <X size={12} />
-                  </button>
-                </span>
-              ))}
-            </div>
-            <div className="flex space-x-2">
-              <input
-                type="text"
-                value={newTag}
-                onChange={(e) => setNewTag(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddTag())}
-                className="flex-1 px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-white placeholder-gray-500"
-                placeholder="Добавить тег"
-              />
-              <button
-                type="button"
-                onClick={handleAddTag}
-                className="px-3 py-2 bg-white/10 text-gray-300 rounded-lg hover:bg-white/20 transition-colors"
-              >
-                <Plus size={16} />
-              </button>
             </div>
           </div>
 

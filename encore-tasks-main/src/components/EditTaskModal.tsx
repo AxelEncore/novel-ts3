@@ -18,7 +18,6 @@ interface TaskFormData {
   status: 'todo' | 'in_progress' | 'review' | 'done' | 'deferred';
   due_date: string;
   assignee_ids: string[];
-  tags: string[];
   settings: {
     notifications_enabled: boolean;
     auto_archive: boolean;
@@ -34,7 +33,6 @@ interface ValidationErrors {
   status: string;
   due_date: string;
   assignee_ids: string;
-  tags: string;
 }
 
 interface EditTaskModalProps {
@@ -76,7 +74,6 @@ export function EditTaskModal({
     status: 'todo',
     due_date: '',
     assignee_ids: [],
-    tags: [],
     settings: {
       notifications_enabled: true,
       auto_archive: false,
@@ -90,7 +87,6 @@ export function EditTaskModal({
   const [users, setUsers] = useState<User[]>([]);
   const [loadingColumns, setLoadingColumns] = useState(false);
   const [loadingUsers, setLoadingUsers] = useState(false);
-  const [newTag, setNewTag] = useState('');
 
   useEffect(() => {
     if (isOpen && task) {
@@ -102,7 +98,6 @@ export function EditTaskModal({
         status: task.status,
         due_date: task.due_date || '',
         assignee_ids: task.assignees?.map(a => a.id) || [],
-        tags: [...(task.tags || [])],
         settings: task.settings ? { ...task.settings } : {
           notifications_enabled: true,
           auto_archive: false,
@@ -157,7 +152,6 @@ export function EditTaskModal({
     formData.status !== task.status ||
     formData.due_date !== (task.due_date || '') ||
     JSON.stringify(formData.assignee_ids.sort()) !== JSON.stringify((task.assignees?.map(a => a.id) || []).sort()) ||
-    JSON.stringify(formData.tags.sort()) !== JSON.stringify((task.tags || []).sort()) ||
     JSON.stringify(formData.settings) !== JSON.stringify(task.settings || {
       notifications_enabled: true,
       auto_archive: false,
@@ -204,7 +198,6 @@ export function EditTaskModal({
           status: formData.status,
           due_date: formData.due_date || null,
           assignee_ids: formData.assignee_ids,
-          tags: formData.tags,
           settings: formData.settings,
         }),
       });
@@ -224,23 +217,6 @@ export function EditTaskModal({
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const handleAddTag = () => {
-    if (newTag.trim() && !formData.tags.includes(newTag.trim())) {
-      setFormData(prev => ({
-        ...prev,
-        tags: [...prev.tags, newTag.trim()]
-      }));
-      setNewTag('');
-    }
-  };
-
-  const handleRemoveTag = (tagToRemove: string) => {
-    setFormData(prev => ({
-      ...prev,
-      tags: prev.tags.filter(tag => tag !== tagToRemove)
-    }));
   };
 
   const toggleAssignee = (userId: string) => {
@@ -419,47 +395,6 @@ export function EditTaskModal({
                       ))}
                     </div>
                   )}
-                </div>
-              </div>
-
-              <div>
-                <Label className="text-white">Теги</Label>
-                <div className="space-y-2">
-                  <div className="flex space-x-2">
-                    <Input
-                      value={newTag}
-                      onChange={(e) => setNewTag(e.target.value)}
-                      placeholder="Добавить тег"
-                      onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddTag())}
-                    />
-                    <Button
-                      type="button"
-                      onClick={handleAddTag}
-                      size="sm"
-                      variant="outline"
-                    >
-                      <Plus className="w-4 h-4" />
-                    </Button>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {formData.tags.map((tag) => (
-                      <Badge
-                        key={tag}
-                        variant="secondary"
-                        className="flex items-center space-x-1"
-                      >
-                        <Tag className="w-3 h-3" />
-                        <span>{tag}</span>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveTag(tag)}
-                          className="ml-1 text-gray-400 hover:text-white"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </Badge>
-                    ))}
-                  </div>
                 </div>
               </div>
 
